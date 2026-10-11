@@ -5,8 +5,8 @@ import { ThemeProvider, useTheme } from "next-themes";
 import { flushSync } from "react-dom";
 import { Moon, Sun } from "lucide-react";
 
-export function ColorThemeProvider({ children }: { children: ReactNode }) {
-  return <ThemeProvider attribute="data-theme" storageKey="flux-theme" defaultTheme="system" enableSystem disableTransitionOnChange>{children}</ThemeProvider>;
+export function ColorThemeProvider({ children, nonce }: { children: ReactNode; nonce?: string }) {
+  return <ThemeProvider nonce={nonce} attribute="data-theme" storageKey="flux-theme" defaultTheme="system" enableSystem disableTransitionOnChange>{children}</ThemeProvider>;
 }
 
 // Circular reveal adapted from Magic UI's AnimatedThemeToggler. See

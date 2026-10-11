@@ -4,7 +4,7 @@ import * as Y from "yjs";
 import { z } from "zod";
 import { can, branchRoom, type CheckpointSummary, type HistoryHead, type RestoreResult } from "@flux/shared";
 import { DOCUMENT_SCHEMA_VERSION, contentFromYDoc, validateDocument, yDocFromContent } from "@flux/document-model";
-import { digest, SnapshotStorage, type SnapshotPayload } from "@flux/storage";
+import { digest, encodeSnapshot, SnapshotStorage, type SnapshotPayload } from "@flux/storage";
 import type { Document, Hocuspocus } from "@hocuspocus/server";
 import { RoomGate } from "./room-gate.js";
 
@@ -36,10 +36,11 @@ export function checkpointSummary(checkpoint: Checkpoint): CheckpointSummary {
 
 async function requireAccess(db: Pick<PrismaClient, "session" | "workspaceMember">, workspaceId: string, userId: string, sessionId: string, edit: boolean) {
   const [session, member] = await Promise.all([
-    db.session.findUnique({ where: { id: sessionId } }),
+    db.session.findUnique({ where: { id: sessionId }, include: { user: { select: { emailVerifiedAt: true } } } }),
     db.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId } } }),
   ]);
   if (!session || session.userId !== userId || session.expiresAt <= new Date()) throw new HistoryError(401, "Your session expired");
+  if (process.env.REQUIRE_EMAIL_VERIFICATION === "true" && !session.user.emailVerifiedAt) throw new HistoryError(403, "Verify your email before opening document history");
   if (!member) throw new HistoryError(404, "Document not found");
   if (edit && !can(member.role, "edit")) throw new HistoryError(403, "Your role cannot change document history");
 }
@@ -61,7 +62,7 @@ export class HistoryCoordinator {
     if (!user) throw new HistoryError(401, "Your session expired");
 
     const room = branchRoom(file.mainBranch.id, file.mainBranch.generation);
-    return this.gate.run(room, async () => {
+    return this.gate.run(`history-workspace:${file.workspaceId}`, () => this.gate.run(room, async () => {
       // A request may have waited behind a slow upload or a restore. Recheck
       // before exposing the head or returning an idempotent previous result.
       await requireAccess(this.db, file.workspaceId, userId, sessionId, command.operation !== "head");
@@ -94,8 +95,12 @@ export class HistoryCoordinator {
           yjsState: Buffer.from(Y.encodeStateAsUpdate(document)).toString("base64"),
         };
         const state = new Uint8Array(Y.encodeStateAsUpdate(document));
+        const used = await this.db.checkpoint.aggregate({ where: { file: { workspaceId: file.workspaceId } }, _sum: { byteLength: true } });
+        const remaining = 256 * 1024 * 1024 - (used._sum.byteLength ?? 0);
+        if (currentBranch.checkpointNumber + (command.operation === "restore" ? 2 : 1) > 1000) throw new HistoryError(403, "This document has reached its 1,000-checkpoint limit");
 
         if (command.operation === "checkpoint") {
+          if (encodeSnapshot(snapshot).byteLength > remaining) throw new HistoryError(403, "This workspace has reached its 256 MiB checkpoint-storage limit");
           const id = randomUUID();
           const objectKey = `${file.workspaceId}/${file.id}/${currentBranch.id}/${id}.json`;
           const stored = await this.storage.put(objectKey, snapshot);
@@ -142,11 +147,10 @@ export class HistoryCoordinator {
           const restoredId = randomUUID();
           const preservedKey = `${file.workspaceId}/${file.id}/${currentBranch.id}/${preservedId}.json`;
           const restoredKey = `${file.workspaceId}/${file.id}/${currentBranch.id}/${restoredId}.json`;
+          const restoredSnapshot: SnapshotPayload = { format: "flux.document", schemaVersion: DOCUMENT_SCHEMA_VERSION, content: target.content, yjsState: Buffer.from(nextState).toString("base64") };
+          if (encodeSnapshot(snapshot).byteLength + encodeSnapshot(restoredSnapshot).byteLength > remaining) throw new HistoryError(403, "This workspace has reached its 256 MiB checkpoint-storage limit; main was not changed");
           const preservedBlob = await this.storage.put(preservedKey, snapshot);
-          const restoredBlob = await this.storage.put(restoredKey, {
-            format: "flux.document", schemaVersion: DOCUMENT_SCHEMA_VERSION, content: target.content,
-            yjsState: Buffer.from(nextState).toString("base64"),
-          });
+          const restoredBlob = await this.storage.put(restoredKey, restoredSnapshot);
           // Drain earlier debounced persistence before replacing the recovery epoch.
           await this.persist(room, document);
           const restored = await this.db.$transaction(async tx => {
@@ -187,8 +191,8 @@ export class HistoryCoordinator {
         // A retired room's final store is fenced by the generation check in persist.
         // Cleanup must not turn a committed action into a misleading failure.
         // Retrying the same request ID still retrieves the committed result.
-        await direct.disconnect().catch(error => { console.error("History room cleanup failed", error); });
+        await direct.disconnect().catch(() => { console.error(JSON.stringify({ event: "history_room_cleanup_failed" })); });
       }
-    });
+    }));
   }
 }

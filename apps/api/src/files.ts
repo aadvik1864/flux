@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Inject, Module, NotFoundException, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Module, NotFoundException, Param, Post, Req, UseGuards, ForbiddenException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { branchRoom, colorForUser, type FileDetail } from "@flux/shared";
@@ -18,6 +19,9 @@ class FilesController {
     await this.access.workspace(workspaceId, request.identity.user.id, "edit");
     const data = input(z.object({ name: resourceName }), body);
     return this.db.$transaction(async tx => {
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Workspace" WHERE "id" = ${workspaceId} FOR UPDATE`);
+      await this.access.workspace(workspaceId, request.identity.user.id, "edit", tx);
+      if (await tx.file.count({ where: { workspaceId } }) >= 100) throw new ForbiddenException("This workspace has reached its 100-document limit");
       const file = await tx.file.create({ data: { workspaceId, name: data.name } });
       const branch = await tx.branch.create({ data: { fileId: file.id, name: "main" } });
       return tx.file.update({ where: { id: file.id }, data: { mainBranchId: branch.id }, select: { id: true, name: true } });

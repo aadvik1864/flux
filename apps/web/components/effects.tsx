@@ -47,7 +47,7 @@ export function ClickSpark({ className = "", children }: Pick<HTMLAttributes<HTM
     observer.observe(parent); resize();
     const draw = (now: number) => {
       ctx.clearRect(0, 0, width, height);
-      ctx.strokeStyle = getComputedStyle(parent).getPropertyValue("--blue").trim();
+      ctx.strokeStyle = getComputedStyle(parent).getPropertyValue("--accent").trim();
       ctx.lineWidth = 1.5;
       sparks.current = sparks.current.filter(spark => {
         const progress = (now - spark.startTime) / 380;

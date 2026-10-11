@@ -31,11 +31,70 @@ model User {
   name         String
   email        String            @unique
   passwordHash String
+  emailVerifiedAt DateTime?
   createdAt    DateTime          @default(now())
   sessions     Session[]
   memberships  WorkspaceMember[]
   checkpoints  Checkpoint[]      @relation("CheckpointCreator")
   activities   ActivityEvent[]   @relation("ActivityActor")
+  accountTokens AccountToken[]
+}
+
+enum AccountTokenPurpose {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
+model AccountToken {
+  id        String @id @default(cuid())
+  tokenHash String @unique
+  userId    String
+  purpose   AccountTokenPurpose
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+}
+
+// Operators invite the first workspace owners; workspace invitations admit teammates.
+model SignupInvitation {
+  id         String @id @default(cuid())
+  tokenHash  String @unique
+  email      String
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime @default(now())
+}
+
+// Bearer links are encrypted until delivered, then erased. SMTP is at-least-once.
+model EmailMessage {
+  id          String @id @default(cuid())
+  payload     String?
+  attempts    Int @default(0)
+  nextAttempt DateTime @default(now())
+  sentAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([sentAt, nextAttempt])
+}
+
+model AuthThrottle {
+  key       String @id
+  hits      Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model SecurityEvent {
+  id        String @id @default(cuid())
+  type      String
+  userId    String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model Session {

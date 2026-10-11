@@ -18,6 +18,8 @@ accounts → private workspace → invitation → shared document → durable sa
 - Responsive workspace/editor UI, unit tests, and browser acceptance tests.
 - Persisted day/night themes, compact layouts, document search/sorting, list/grid
   views, and keyboard quick open.
+- Reference-led slate/coral/orchid identity, self-hosted typography, and an original
+  interactive ribbon sculpture on the entry screen with a static mobile fallback.
 - Named, immutable document checkpoints in private S3-compatible object storage.
 - Paginated history with formatted, read-only checkpoint previews.
 - Explicit restore with current-head validation and automatic preservation of main.
@@ -51,11 +53,22 @@ RustFS provides local S3 storage at `127.0.0.1:9010` with its console on port 90
 The checkpoint bucket is created privately on first use; browsers never receive
 raw storage credentials or public snapshot URLs. All Compose credentials are local-only.
 
-Invitation emails are not sent yet. Create an invitation in the workspace and
-share its link manually. The recipient must register/sign in with the matching
-email address before accepting it. This preview does **not** verify ownership of
-an email address; email verification or a verified identity provider is required
-before a public launch.
+Local defaults allow direct signup and manually shared invitations for demos.
+The production Docker kit requires **invite-only signup, verified email, and
+authenticated TLS SMTP**. It delivers invitations, verification, and password
+recovery through an encrypted retryable outbox. Local demo email is disabled
+unless SMTP is configured; an email string alone is not verified identity.
+
+## Production deployment kit
+
+Use [the deployment and recovery runbook](docs/production.md) for the current
+documents/history release. `deploy/` includes non-root images, a private database
+and snapshot service, a same-origin HTTPS/WSS gateway, health checks, resource
+limits, a single-sync-server lease, and authenticated encrypted backup/restore.
+`npm run test:release` exercises a separate production-mode Docker stack.
+
+**Not live yet:** your domain/server, SMTP sender, external alerts, off-host
+backups, and the runbook's launch gate still need configuration and validation.
 
 ### Two-user demonstration
 
@@ -97,14 +110,30 @@ include a generation number to fence restored sessions.
 
 - Toggle **Day / Night** in the header. Flux initially follows your system theme;
   an explicit choice is remembered in this browser and synchronized across tabs.
-- Use **Find a document**, sort by recent edits/name, or switch list/grid layouts.
+- Use **Find a document**, sort by recent edits/name, or switch layouts. The
+  illustrated grid is the default; List view keeps larger collections compact.
 - **Ctrl+K / ⌘K** opens documents in the current workspace and accessible workspaces.
   Tab through results, Enter to open, and Escape to close.
 - Collapse the team rail, show/hide your password, or use **Wide page** in the editor.
   The live word count includes separate paragraphs and table cells.
-- Spotlight cards and click sparks are adapted from React Bits; the circular theme
+- The entry uses Uiverse-derived liquid-fill controls and a GSAP headline reveal.
+  The optional locally rendered ribbon sculpture responds to pointer movement
+  and a keyboard-accessible rotation button. Mobile, reduced-motion, low-bandwidth,
+  or WebGL-unavailable sessions keep the immediate local WebP artwork instead.
+- Mobile workspace navigation is tucked behind the menu button; document actions
+  remain directly accessible. Artwork stays in editor controls, never inside the
+  shared document.
+- Document drawings unfold on hover or keyboard focus; checkpoint illustrations
+  gather into a saved stack. The entry preview changes the sculpture arrangement.
+  Touch/reduced-motion sessions keep static artwork; essential actions never
+  depend on hovering. These effects do not change document content or history.
+- The same original folder/page/person illustration family appears in the main
+  workspace heading, left navigation, search states, creation dialogs, invitations,
+  account recovery screens, editor history actions, and checkpoint previews.
+- Spotlight cards/click sparks are adapted from React Bits; the circular theme
   reveal is adapted from Magic UI. Motion respects reduced-motion preferences,
-  with instant theme changes on unsupported browsers. See [sources and licenses](docs/ui-sources.md).
+  with instant theme changes on unsupported browsers. Fonts and artwork are
+  self-hosted. See [sources and licenses](docs/ui-sources.md).
 
 ### If workspace loading gets stuck
 
@@ -132,6 +161,9 @@ Browser tests require a running migrated database and private S3 storage
 ```bash
 npx playwright install chromium
 npm run test:e2e
+# Optional Firefox coverage:
+npx playwright install firefox
+FLUX_TEST_FIREFOX=true npm run test:e2e
 ```
 
 Playwright starts the app when necessary and otherwise reuses local port 3000.
@@ -171,9 +203,9 @@ docs/                 Architecture, requirements, roadmap, testing, Office evalu
   release work. No incomplete checkpoint appears in history.
 - Debounced recovery writes are backed by an explicit ordered flush request.
   The UI reports **Saved** only after the corresponding database commit is acknowledged.
-- This is not a production release. Email verification, password recovery,
-  security review, storage limits, audit events, monitoring, and backup recovery
-  exercises remain release requirements.
+- Production hardening and deployment tooling are implemented for this feature
+  slice, but real hosting/email/alerts and target-environment validation are still
+  operator launch requirements. This is not a completed Flux V1 or a security certification.
 - The local Postgres credentials in Compose are development-only. Do not expose
   them or reuse them in production.
 - `npm run infra:down` stops local infrastructure but preserves its volumes.

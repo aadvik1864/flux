@@ -1,0 +1,156 @@
+name: ${COMPOSE_PROJECT_NAME:-flux-production}
+
+x-app-environment: &app-environment
+  NODE_ENV: production
+  DATABASE_URL: postgresql://flux_app:${POSTGRES_APP_PASSWORD:?set POSTGRES_APP_PASSWORD}@postgres:5432/flux?schema=public&connection_limit=10&connect_timeout=5&pool_timeout=5
+  APP_ORIGIN: ${APP_ORIGIN:?set APP_ORIGIN}
+  COLLABORATION_SECRET: ${COLLABORATION_SECRET:?set COLLABORATION_SECRET}
+  COLLABORATION_INTERNAL_URL: http://collaboration:1234
+  REQUIRE_EMAIL_VERIFICATION: "true"
+  AUTH_MODE: invite-only
+  S3_ENDPOINT: http://object-storage:9000
+  S3_REGION: us-east-1
+  S3_BUCKET: flux-checkpoints
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY}
+
+x-service: &service
+  restart: unless-stopped
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: [/tmp]
+  stop_grace_period: 60s
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  postgres:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: flux_admin
+      POSTGRES_DB: flux
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?set POSTGRES_APP_PASSWORD}
+    command: [postgres, -c, statement_timeout=45000, -c, idle_in_transaction_session_timeout=60000]
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ./init-database.sh:/docker-entrypoint-initdb.d/10-flux.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U flux_admin -d flux"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 1g
+  object-storage:
+    image: rustfs/rustfs@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    restart: unless-stopped
+    command: /data
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY}
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_OBS_LOGGER_LEVEL: error
+    volumes: ["snapshots:/data"]
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:9000/health]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 1g
+  migrate:
+    <<: *service
+    image: flux-tools:${FLUX_TAG:-local}
+    build: { context: .., dockerfile: deploy/Dockerfile, target: tools }
+    restart: "no"
+    profiles: [operations]
+    environment: *app-environment
+    command: ["../../node_modules/.bin/prisma", migrate, deploy]
+    depends_on: { postgres: { condition: service_healthy } }
+  tools:
+    <<: *service
+    image: flux-tools:${FLUX_TAG:-local}
+    build: { context: .., dockerfile: deploy/Dockerfile, target: tools }
+    restart: "no"
+    profiles: [operations]
+    environment:
+      <<: *app-environment
+      MAIL_MODE: smtp
+      MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:?set MAIL_ENCRYPTION_KEY}
+      MAIL_FROM: ${MAIL_FROM:?set MAIL_FROM}
+      SMTP_HOST: ${SMTP_HOST:?set SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:?set SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?set SMTP_PASSWORD}
+  collaboration:
+    <<: *service
+    image: flux-collaboration:${FLUX_TAG:-local}
+    build: { context: .., dockerfile: deploy/Dockerfile, target: collaboration }
+    environment:
+      <<: *app-environment
+      COLLABORATION_HOST: 0.0.0.0
+      MAX_CONNECTIONS: 100
+      MAX_ACTIVE_DOCUMENTS: 50
+    depends_on: { postgres: { condition: service_healthy }, object-storage: { condition: service_healthy } }
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:1234/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    mem_limit: 768m
+  api:
+    <<: *service
+    image: flux-api:${FLUX_TAG:-local}
+    build: { context: .., dockerfile: deploy/Dockerfile, target: api }
+    environment:
+      <<: *app-environment
+      API_HOST: 0.0.0.0
+      TRUST_PROXY_HOPS: 1
+      MAIL_MODE: smtp
+      MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY}
+      MAIL_FROM: ${MAIL_FROM}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+    depends_on: { collaboration: { condition: service_healthy } }
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:4000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 20s
+      retries: 3
+      start_period: 30s
+    mem_limit: 512m
+  web:
+    <<: *service
+    image: flux-web:${FLUX_TAG:-local}
+    build: { context: .., dockerfile: deploy/Dockerfile, target: web }
+    environment: { APP_ORIGIN: "${APP_ORIGIN}", API_INTERNAL_URL: "http://api:4000" }
+    depends_on: { api: { condition: service_healthy } }
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    mem_limit: 512m
+  gateway:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    restart: unless-stopped
+    environment: { FLUX_DOMAIN: "${FLUX_DOMAIN:?set FLUX_DOMAIN}", ACME_EMAIL: "${ACME_EMAIL:?set ACME_EMAIL}" }
+    ports: ["80:80", "443:443"]
+    volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy-data:/data", "caddy-config:/config"]
+    depends_on: { web: { condition: service_healthy } }
+    mem_limit: 256m
+
+volumes:
+  postgres:
+  snapshots:
+  caddy-data:
+  caddy-config:

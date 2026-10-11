@@ -4,8 +4,13 @@ The source of truth is `apps/api/prisma/schema.prisma` and its checked-in migrat
 
 | Model | Key relationships / guarantees |
 |---|---|
-| User | Unique normalized email; salted password hash |
+| User | Unique normalized email; salted password hash; optional verified-email timestamp |
 | Session | Hashed random token; user; expiry |
+| AccountToken | Hashed one-use verification/reset token; purpose/user/expiry; user-row serialized consumption |
+| SignupInvitation | Operator-issued email-bound hashed signup credential; expiry and atomic claim |
+| EmailMessage | AES-GCM encrypted delivery payload; attempts/backoff; erased after SMTP delivery |
+| AuthThrottle | Hashed address/operation throttle key; atomic fixed-window hit count |
+| SecurityEvent | Credential/invitation/recovery event type and optional user ID; no email/token/password |
 | Workspace | Private team boundary |
 | WorkspaceMember | Composite workspace/user key; role |
 | Invitation | Unique hashed token; workspace; matching email; role; expiry; consumption time |

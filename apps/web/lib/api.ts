@@ -8,6 +8,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers: { "Content-Type": "application/json", ...init.headers },
     credentials: "same-origin",
     cache: "no-store",
+    signal: init.signal ?? AbortSignal.timeout(45_000),
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) {

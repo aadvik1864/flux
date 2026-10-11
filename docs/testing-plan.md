@@ -2,11 +2,13 @@
 
 ## Automated now
 
-Current verification: 43 unit tests and 17 Chromium acceptance tests pass, along
+Current verification: 48 unit tests, 25 Chromium acceptance tests, and 24 Firefox
+acceptance tests pass (one unsupported Firefox touch-emulation test is skipped), along
 with type checks and the production build. Dependency audit reports no known
 vulnerabilities. These checks do not replace release security/load testing.
 
-`npm test`: role separation, stable room/color utilities, salted passwords,
+`npm test`: role separation, stable room/color utilities, versioned salted scrypt,
+legacy password compatibility, bounded password-check capacity and queue recovery,
 token hashing, safe internal redirects, CRDT convergence and deletion recovery.
 History units cover schema validation/round-trips, block-ID uniqueness, checksums,
 snapshot limits, conditional object creation, FIFO barriers, and room generations.
@@ -39,6 +41,21 @@ list/grid switching, team collapse, quick-open focus/Escape/Enter, and preventin
 nested dialogs. Desktop, tablet, and 320px mobile layouts are checked for overflow
 and captured for visual review. Word counts handle separate blocks; wide-page
 and theme controls are verified not to change document content or its history head.
+The reference-led entry has no-WebGL poster coverage, narrow-tablet/mobile
+overflow checks, optional WebGL keyboard rotation, idle-render-loop assertions,
+reduced-motion switching, and simulated context-loss fallback. Mobile navigation
+checks disclosure, Escape, and returning focus to its trigger. The sculpture test
+is skipped on browsers that cannot create WebGL2; poster checks still run.
+Additional coverage checks functional color regions, stable document accent
+colors through sorting, hover/keyboard SVG changes, reduced-motion static
+graphics, touch-first document opening, onboarding creation, and graphic-mode
+changes in the entry scene. Decorative interactions are verified not to mutate
+document names or history heads.
+The app-wide illustration family is checked in default-grid/main navigation,
+creation/invitation/search dialogs, empty search states, editor/checkpoint actions,
+history previews, and the email-bound invitation joining flow. Focus and mobile
+dialog layouts are preserved, graphics are absent from authored document content,
+and canceling the illustrated restore dialog leaves the history head unchanged.
 
 ## Before the next milestone is declared reliable
 
@@ -50,7 +67,8 @@ and theme controls are verified not to change document content or its history he
 - Logout revokes an already-open document connection.
 - Formatting, tables, deletes, paste, split blocks, undo/redo, and duplicate IDs.
 - Broader mobile-device, keyboard, native-dialog, and reduced-motion coverage;
-  current automated browser coverage is Chromium, not Safari/Firefox.
+   current automated browser coverage is Chromium/Firefox, not Safari/WebKit or
+  native mobile devices.
 
 ## Future merge acceptance
 
@@ -67,3 +85,24 @@ and theme controls are verified not to change document content or its history he
 Verified identity, HTTPS/WSS, private storage, secret rotation, session revocation,
 backup restore, measured small-team load, error monitoring, and documented
 retention/import-export limitations. Do not claim large-scale capacity unmeasured.
+
+`npm run test:release` creates a fresh production-mode Docker stack with local
+HTTPS and a TLS-authenticated SMTP sink. Browser checks cover invite-only access,
+email ownership, scanner-safe fragments, password-reset races and session revocation,
+secure cookies, CSP, viewer roles, eight real concurrent WebSocket editors, durable
+saving, checkpoints, API payload limits, and credential throttling. It also checks
+the production singleton lease, makes an encrypted cold backup, restores into a
+fresh project, verifies normalized document hashes/checkpoints and generation
+fencing, and rejects a second restore over existing data. See `docs/production.md`
+for real domain/SMTP/monitoring/target-hardware gates this test does not cover.
+
+The complete local release exercise passed twice consecutively on 2026-10-11,
+including restored document/hash/checkpoint validation and populated-target refusal.
+Every application image and test script uses one frozen source snapshot and a
+per-run image tag.
+The release browser runs in a pinned Playwright container on the test network to
+isolate it from host network changes; update its image/version/digest alongside
+`@playwright/test`. Failed runs preserve network errors, screenshots, service logs,
+and container health/exit state before cleanup. Only disposable-fixture diagnostics,
+not environment files or database archives, are uploaded by CI. TLS certificates
+and SMTP delivery are local test fixtures, not public-domain or real-inbox validation.

@@ -47,6 +47,7 @@ export class SnapshotStorage {
 
   constructor(environment: Record<string, unknown> = process.env) {
     const config = storageEnvSchema.parse(environment);
+    if (environment.NODE_ENV === "production" && (config.S3_SECRET_KEY.length < 32 || /local_only|replace|example/i.test(config.S3_SECRET_KEY))) throw new Error("Production requires non-example storage credentials of at least 32 characters");
     this.bucket = config.S3_BUCKET;
     this.client = new S3Client({
       endpoint: config.S3_ENDPOINT, region: config.S3_REGION, forcePathStyle: true,
@@ -54,6 +55,8 @@ export class SnapshotStorage {
       maxAttempts: 2, requestHandler: { connectionTimeout: 2000, requestTimeout: 10_000 },
     });
   }
+
+  async ready() { await this.client.send(new HeadBucketCommand({ Bucket: this.bucket })); }
 
   async ensureBucket() {
     if (!this.initialization) {

@@ -2,8 +2,13 @@
   "name": "flux",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
-  "engines": { "node": ">=22.12.0" },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "build:packages": "npm run build -w @flux/shared && npm run build -w @flux/document-model && npm run build -w @flux/storage",
     "dev": "npm run build:packages && concurrently -k -n web,api,sync -c blue,green,magenta \"npm run dev -w @flux/web\" \"npm run dev -w @flux/api\" \"npm run dev -w @flux/collaboration\"",
@@ -11,6 +16,7 @@
     "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present && tsc -p tsconfig.tests.json",
     "test": "npm run build:packages && vitest run",
     "test:e2e": "playwright test",
+    "test:release": "python3 tests/release/run.py",
     "db:generate": "npm run db:generate -w @flux/api",
     "db:migrate": "npm run db:migrate -w @flux/api",
     "infra:up": "docker compose up -d",
@@ -19,14 +25,18 @@
   "devDependencies": {
     "@playwright/test": "^1.58.0",
     "@types/node": "^22.0.0",
+    "@types/smtp-server": "^3.5.13",
     "concurrently": "^9.2.0",
     "dotenv-cli": "^11.0.0",
+    "smtp-server": "^3.19.21",
     "typescript": "^5.9.0",
     "vite": "^7.3.0",
     "vitest": "4.1.11"
   },
   "overrides": {
     "vite": "$vite",
-    "@prisma/config": { "deepmerge-ts": "^8.0.0" }
+    "@prisma/config": {
+      "deepmerge-ts": "^8.0.0"
+    }
   }
 }

@@ -10,18 +10,20 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@flux/document-model": "0.1.0",
     "@flux/shared": "0.1.0",
     "@flux/storage": "0.1.0",
-    "@flux/document-model": "0.1.0",
     "@hocuspocus/server": "4.7.0",
     "@prisma/client": "6.19.3",
     "dotenv": "^17.0.0",
     "jsonwebtoken": "^9.0.2",
+    "pg": "^8.23.1",
     "yjs": "^13.6.27",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.20.0"
   }
 }

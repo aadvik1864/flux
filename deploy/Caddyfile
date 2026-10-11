@@ -1,0 +1,40 @@
+{
+  email {$ACME_EMAIL}
+  admin off
+  servers {
+    timeouts {
+      read_header 10s
+      read_body 30s
+      idle 2m
+    }
+  }
+}
+{$FLUX_DOMAIN} {
+  encode zstd gzip
+  header {
+    Strict-Transport-Security "max-age=31536000"
+    Referrer-Policy "no-referrer"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    -Server
+  }
+  request_body {
+    max_size 1MB
+  }
+  @private path /internal/* /api/internal/* /sync/internal/*
+  # Only WebSocket upgrades reach the collaboration server through the public proxy.
+  @sync {
+    path /sync /sync/*
+    header Upgrade websocket
+  }
+  @otherSync path /sync /sync/*
+  route {
+    respond @private 404
+    reverse_proxy @sync collaboration:1234
+    respond @otherSync 404
+    handle_path /api/* {
+      reverse_proxy api:4000
+    }
+    reverse_proxy web:3000
+  }
+}

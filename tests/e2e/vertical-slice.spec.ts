@@ -251,8 +251,11 @@ test("tenant isolation, email-bound one-use invitations, and read-only server en
     const persisted = new Y.Doc(); Y.applyUpdate(persisted, new Uint8Array(state.state));
     expect(persisted.getMap("unauthorized").get("value")).toBeUndefined(); persisted.destroy();
     const disconnected = new Promise<void>(resolve => provider!.on("close", () => resolve()));
+    const duplicate = await owner.request.post(`/api/workspaces/${project.id}/invitations`, { headers: { origin }, data: { email: reader.email, role: "VIEWER" } });
+    const duplicateToken = (await duplicate.json()).url.split("/").at(-1);
     expect((await owner.request.delete(`/api/workspaces/${project.id}/members/${reader.id}`, { headers: { origin } })).ok()).toBe(true);
     await disconnected;
     expect((await viewer.request.post(`/api/files/${file.id}/collaboration-token`, { headers: { origin } })).status()).toBe(404);
+    expect((await viewer.request.post(`/api/invitations/${duplicateToken}/accept`, { headers: { origin } })).status()).toBe(410);
   } finally { provider?.destroy(); maliciousDoc.destroy(); await owner.close(); await viewer.close(); await outsider.close(); }
 });

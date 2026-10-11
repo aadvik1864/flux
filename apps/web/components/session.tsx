@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef, ty
 import { usePathname, useRouter } from "next/navigation";
 import type { PublicUser } from "@flux/shared";
 import { api, ApiError, errorMessage } from "../lib/api";
+import { WorkspaceArtwork } from "./work-art";
 
 const SessionContext = createContext<{
   user: PublicUser | null;
@@ -38,7 +39,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
     catch (error) {
       if (pendingCheck.current !== controller) return;
-      if (error instanceof ApiError && error.status === 401) setUser(null);
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) setUser(null);
       else if (controller.signal.aborted) setError("Your account check timed out. Check your connection and try again.");
       else setError(`Could not check your account. ${errorMessage(error)}`);
     } finally {
@@ -69,7 +70,7 @@ export function Protected({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loading && !user && !error) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
   }, [loading, user, error, router, pathname]);
-  if (error) return <main className="session-unavailable"><p role="alert">{error}</p><button className="button primary" onClick={() => void refresh()}>Try again</button><a className="text-button" href={pathname}>Reload page</a></main>;
-  if (loading || !user) return <div className="loading-screen"><p role="status">Opening your workspace…</p><p className="loading-recovery">If this screen stays here, <a className="text-button" href={pathname}>Reload page</a> to load the latest app.</p><noscript><p>JavaScript is disabled. Enable it for this site to open Flux.</p></noscript></div>;
+  if (error) return <main className="session-unavailable"><WorkspaceArtwork /><p role="alert">{error}</p><button className="button primary" onClick={() => void refresh()}>Try again</button><a className="text-button" href={pathname}>Reload page</a></main>;
+  if (loading || !user) return <div className="loading-screen"><WorkspaceArtwork /><p role="status">Opening your workspace…</p><p className="loading-recovery">If this screen stays here, <a className="text-button" href={pathname}>Reload page</a> to load the latest app.</p><noscript><p>JavaScript is disabled. Enable it for this site to open Flux.</p></noscript></div>;
   return children;
 }

@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+**/.next
+**/dist
+.git
+.env
+.env.*
+deploy/production.env
+test-results
+playwright-report
+coverage
+backups
+**/__pycache__
+**/*.log
+**/*.tsbuildinfo

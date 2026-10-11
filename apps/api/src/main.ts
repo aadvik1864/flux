@@ -1,6 +1,7 @@
 import "reflect-metadata";
-import { Controller, Get, Module } from "@nestjs/common";
+import { Module } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
@@ -11,17 +12,19 @@ import { AuthModule } from "./auth";
 import { WorkspacesModule } from "./workspaces";
 import { FilesModule } from "./files";
 import { CheckpointsModule } from "./checkpoints";
+import { MailModule } from "./mail";
+import { HealthController } from "./health";
+import { requestLog, SafeErrors } from "./http-safety";
 
-@Controller()
-class HealthController {
-  @Get("health") health() { return { service: "flux-api", status: "ok" }; }
-}
-
-@Module({ imports: [DatabaseModule, AuthModule, WorkspacesModule, FilesModule, CheckpointsModule], controllers: [HealthController] })
+@Module({ imports: [DatabaseModule, MailModule, AuthModule, WorkspacesModule, FilesModule, CheckpointsModule], controllers: [HealthController] })
 class AppModule {}
 
 async function main() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
+  app.getHttpAdapter().getInstance().set("trust proxy", env.TRUST_PROXY_HOPS);
+  app.use(requestLog);
+  app.useGlobalFilters(new SafeErrors());
+  app.useBodyParser("json", { limit: "64kb" });
   app.use(helmet());
   app.use(cookieParser());
   app.use((request: Request, response: Response, next: NextFunction) => {
@@ -32,12 +35,14 @@ async function main() {
     }
     next();
   });
-  app.use(["/auth/login", "/auth/register"], rateLimit({
-    windowMs: 60_000, limit: env.NODE_ENV === "production" ? 20 : 100,
+  app.use("/auth", rateLimit({
+    windowMs: 15 * 60_000, limit: env.NODE_ENV === "production" ? 60 : 1000,
     standardHeaders: "draft-8", legacyHeaders: false,
+    message: { message: "Too many attempts. Try again later" },
   }));
+  app.use(rateLimit({ windowMs: 60_000, limit: env.NODE_ENV === "production" ? 300 : 3000, standardHeaders: "draft-8", legacyHeaders: false }));
   app.enableShutdownHooks();
-  await app.listen(env.API_PORT, "127.0.0.1");
+  await app.listen(env.API_PORT, env.API_HOST);
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });

@@ -3,19 +3,21 @@ import {
   Injectable, Module, NotFoundException, Param, Post, Req, UseGuards,
 } from "@nestjs/common";
 import { z } from "zod";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { can, type Permission, type Role, type WorkspaceDetail, type WorkspaceSummary } from "@flux/shared";
 import { Database } from "./database";
 import { publicUser, SessionGuard, type AuthenticatedRequest } from "./auth";
 import { email, input, resourceName } from "./validation";
 import { opaqueToken, tokenHash } from "./security";
 import { env } from "./config";
+import { queueMail } from "./mail";
 
 @Injectable()
 export class AccessService {
   constructor(@Inject(Database) private readonly db: Database) {}
 
-  async workspace(workspaceId: string, userId: string, permission?: Permission): Promise<Role> {
-    const member = await this.db.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId } } });
+  async workspace(workspaceId: string, userId: string, permission?: Permission, database: Pick<PrismaClient, "workspaceMember"> = this.db): Promise<Role> {
+    const member = await database.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId } } });
     if (!member) throw new NotFoundException("Workspace not found");
     if (permission && !can(member.role, permission)) throw new ForbiddenException("Your role cannot perform this action");
     return member.role;
@@ -43,9 +45,11 @@ class WorkspacesController {
   @Post("workspaces")
   async create(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const data = input(z.object({ name: resourceName, description: z.string().trim().max(500).default("") }), body);
-    return this.db.workspace.create({ data: {
-      ...data, members: { create: { userId: request.identity.user.id, role: "OWNER" } },
-    }, select: { id: true, name: true } });
+    return this.db.$transaction(async tx => {
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "User" WHERE "id" = ${request.identity.user.id} FOR UPDATE`);
+      if (await tx.workspaceMember.count({ where: { userId: request.identity.user.id, role: "OWNER" } }) >= 20) throw new ForbiddenException("This account has reached its 20-workspace limit");
+      return tx.workspace.create({ data: { ...data, members: { create: { userId: request.identity.user.id, role: "OWNER" } } }, select: { id: true, name: true } });
+    });
   }
 
   @Get("workspaces/:id")
@@ -67,9 +71,17 @@ class WorkspacesController {
     await this.access.workspace(id, request.identity.user.id, "manageMembers");
     const data = input(z.object({ email, role: z.enum(["EDITOR", "REVIEWER", "VIEWER"]).default("EDITOR") }), body);
     const token = opaqueToken();
-    const invitation = await this.db.invitation.create({ data: {
-      workspaceId: id, ...data, tokenHash: tokenHash(token), expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
-    } });
+    const invitation = await this.db.$transaction(async tx => {
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Workspace" WHERE "id" = ${id} FOR UPDATE`);
+      await this.access.workspace(id, request.identity.user.id, "manageMembers", tx);
+      if (await tx.invitation.count({ where: { workspaceId: id, acceptedAt: null, expiresAt: { gt: new Date() } } }) >= 100) throw new ForbiddenException("This workspace has reached its pending-invitation limit");
+      const invitation = await tx.invitation.create({ data: {
+        workspaceId: id, ...data, tokenHash: tokenHash(token), expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      } });
+      await queueMail(tx, data.email, "Join your team on Flux", `You have been invited to a private Flux workspace. Sign in or verify your email to join:\n${env.APP_ORIGIN}/invite/${token}\n\nThis invitation expires in 48 hours.`);
+      await tx.securityEvent.create({ data: { type: "workspace_invitation_created", userId: request.identity.user.id } });
+      return invitation;
+    });
     return { url: `${env.APP_ORIGIN}/invite/${token}`, expiresAt: invitation.expiresAt.toISOString() };
   }
 
@@ -87,6 +99,8 @@ class WorkspacesController {
       const invitation = await tx.invitation.findUnique({ where: { tokenHash: tokenHash(token) } });
       if (!invitation || invitation.acceptedAt || invitation.expiresAt <= new Date()) throw new GoneException("This invitation expired or has already been used");
       if (invitation.email !== request.identity.user.email) throw new ForbiddenException("This invitation belongs to a different email address");
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Workspace" WHERE "id" = ${invitation.workspaceId} FOR UPDATE`);
+      if (await tx.workspaceMember.count({ where: { workspaceId: invitation.workspaceId } }) >= 100 && !await tx.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: invitation.workspaceId, userId: request.identity.user.id } } })) throw new ForbiddenException("This workspace has reached its 100-member limit");
       const claimed = await tx.invitation.updateMany({
         where: { id: invitation.id, acceptedAt: null, expiresAt: { gt: new Date() } },
         data: { acceptedAt: new Date() },
@@ -105,10 +119,19 @@ class WorkspacesController {
   @Delete("workspaces/:id/members/:userId")
   async remove(@Param("id") id: string, @Param("userId") userId: string, @Req() request: AuthenticatedRequest) {
     await this.access.workspace(id, request.identity.user.id, "manageMembers");
-    const member = await this.db.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: id, userId } } });
-    if (member?.role === "OWNER") throw new ForbiddenException("The workspace owner cannot be removed");
-    await this.db.workspaceMember.deleteMany({ where: { workspaceId: id, userId } });
-    return { ok: true };
+    return this.db.$transaction(async tx => {
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Workspace" WHERE "id" = ${id} FOR UPDATE`);
+      await this.access.workspace(id, request.identity.user.id, "manageMembers", tx);
+      const member = await tx.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: id, userId } }, include: { user: true } });
+      if (member?.role === "OWNER") throw new ForbiddenException("The workspace owner cannot be removed");
+      if (member) {
+        // Outstanding duplicate invitations must not let an offboarded member rejoin.
+        await tx.invitation.deleteMany({ where: { workspaceId: id, email: member.user.email, acceptedAt: null } });
+        await tx.workspaceMember.deleteMany({ where: { workspaceId: id, userId } });
+        await tx.securityEvent.create({ data: { type: "workspace_member_removed", userId } });
+      }
+      return { ok: true };
+    });
   }
 }
 

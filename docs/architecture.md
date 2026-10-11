@@ -2,7 +2,8 @@
 
 ## Services
 
-- **Web:** Next.js, React, TypeScript, Tailwind; calls `/api/*` through a same-origin rewrite.
+- **Web:** Next.js, React, TypeScript, Tailwind; calls `/api/*` through a same-origin
+  development rewrite or the production Caddy gateway.
 - **API:** Modular NestJS application with PostgreSQL/Prisma. Issues sessions,
   validates membership, and signs short-lived branch-scoped collaboration tokens.
 - **Collaboration:** One Hocuspocus instance. Authenticates tokens, loads Yjs
@@ -16,6 +17,11 @@ microservice fleet, Redis, LiveKit, or Office integration is required yet.
 Passwords use salted scrypt. Session tokens are random 256-bit values; only their
 SHA-256 hashes are stored. Cookies are HttpOnly, SameSite=Lax, and Secure in
 production. Mutating API requests must carry the configured `APP_ORIGIN`.
+Production additionally requires verified email and invite-only signup. Email
+verification/reset uses expiring, hashed one-use tokens and user-row locks. SMTP
+delivery comes from an encrypted transactional outbox with retry/backoff. Password
+changes revoke all sessions/account tokens; login rechecks the password hash under
+the same lock before creating its session.
 
 Collaboration JWTs expire in two minutes, use HS256 with issuer/audience checks,
 and are scoped to a single `branch:<id>:<generation>` room. Existing connections continuously
@@ -62,6 +68,8 @@ One API process and one collaboration process are the validated topology.
 Per-room write queues are process-local. Multiple collaboration instances would
 need shared synchronization, authoritative ordering, and distributed coordination
 before they can safely write the same document.
+A dedicated PostgreSQL advisory lease enforces this limit in production. Resource
+caps and rate limits are safety bounds, not advertised large-team capacity.
 
 ## Checkpoints and restore
 
@@ -104,8 +112,12 @@ and publish events only after successful commit. Revalidate both branch heads.
 Semantic merge application is still unimplemented; restore's generation change
 must not be mistaken for a completed three-way merge algorithm.
 
-## Remaining security work
+## Production operations
 
-Verified email/provider identity, password recovery, resource quotas, per-room
-rate limiting, CSP/security review, audit events, retention/deletion rules,
-managed secrets, monitored backups, and recovery drills are required before launch.
+The Docker kit provides HTTPS/WSS, nonce-based script CSP, private services,
+non-root application images, dependency-aware health checks, limited structured
+logs, account security events, bounded credential/document use, and encrypted cold
+backup/restore. Restores refuse populated targets and fence old sessions/rooms.
+See `docs/production.md` for the actual launch gate: real SMTP/domain validation,
+off-host custody, external alerts, sustained target-hardware load, browser/device
+coverage, privacy/export/deletion procedures, and independent security review.

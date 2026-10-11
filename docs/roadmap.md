@@ -54,8 +54,18 @@ spreadsheets/presentations and file-level snapshots; document format limitations
 
 ## Release hardening
 
-Verified identity, security review, storage quotas, retention/deletion rules,
-backup restoration, load/reconnection tests, monitoring, deployment automation,
-and an end-to-end multi-account demonstration.
+- [x] Invite-only production mode; verified email and one-use password recovery.
+- [x] Encrypted SMTP outbox, persistent address throttles, session revocation.
+- [x] Document/storage/socket limits, account security events, nonce script CSP.
+- [x] Non-root Docker kit, HTTPS gateway, private services, dependency health checks.
+- [x] Production collaboration singleton lease and graceful drain.
+- [x] Authenticated encrypted cold backup/restore tooling with empty-target guards.
+- [ ] Real hosting/domain/SMTP identity and delivery configured by the operator.
+- [ ] External monitoring/alerts and off-host backup custody on the target host.
+- [ ] Target-host sustained load, device coverage, privacy/deletion/export procedures.
+- [ ] Independent security review before expansion beyond trusted invited teams.
+
+The executable local release checks and launch checklist are in `docs/production.md`.
+Production hardening does not implement the remaining product milestones.
 
 Fine-grained replay, advanced Office merging, and cross-file consistency stay later.

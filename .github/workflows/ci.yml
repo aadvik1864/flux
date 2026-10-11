@@ -1,52 +1,42 @@
-name: Flux checks
+name: Verify Flux
 on:
   push:
   pull_request:
-
+permissions:
+  contents: read
 jobs:
   verify:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: flux
-          POSTGRES_PASSWORD: flux_local_only
-          POSTGRES_DB: flux
-        ports:
-          - 5438:5432
-        options: >-
-          --health-cmd "pg_isready -U flux -d flux"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: cp .env.example .env
-      - name: Start private checkpoint storage
-        run: >-
-          docker run -d --name flux-history-storage
-          -p 127.0.0.1:9010:9000
-          -e RUSTFS_ACCESS_KEY=flux_storage
-          -e RUSTFS_SECRET_KEY=flux_storage_local_only
-          -e RUSTFS_CONSOLE_ENABLE=true
-          rustfs/rustfs@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c /data
-      - run: curl --fail --retry 20 --retry-delay 2 --retry-connrefused http://localhost:9010/health
+        with: { node-version: "22.22.3", cache: npm }
       - run: npm ci
-      - run: npm run db:generate
-      - run: npm run db:migrate
+      - name: Configure isolated development tests
+        run: |
+          mkdir -p /tmp/opencode
+          node -e "const fs=require('node:fs');const crypto=require('node:crypto');fs.writeFileSync('.env',fs.readFileSync('.env.example','utf8').replace('replace-this-with-a-random-secret-at-least-32-characters',crypto.randomBytes(32).toString('hex')),{mode:0o600})"
+          docker compose up -d --wait
+          npm run db:generate
+          npm run db:migrate
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
       - run: npm audit --audit-level=high
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:e2e
+        env: { FLUX_TEST_FIREFOX: "true" }
+      - run: npm run test:release
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: browser-test-results
-          path: test-results/
+          name: browser-failures
+          path: |
+            test-results/
+            playwright-report/
+            /tmp/opencode/flux-release-*/diagnostics/
+          retention-days: 7
+      - name: Stop local test infrastructure
+        if: always()
+        run: docker compose down

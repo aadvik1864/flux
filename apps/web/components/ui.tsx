@@ -16,7 +16,7 @@ export function ErrorNotice({ message }: { message: string }) {
   return message ? <div className="error-notice" role="alert">{message}</div> : null;
 }
 
-export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Modal({ title, onClose, children, artwork }: { title: string; onClose: () => void; children: ReactNode; artwork?: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -27,8 +27,8 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
     dialog?.querySelector<HTMLElement>("input:not([disabled]), textarea:not([disabled]), select:not([disabled])")?.focus();
     return () => dialog?.close();
   }, []);
-  return <dialog ref={ref} className="modal" aria-labelledby={titleId} onCancel={event => { event.preventDefault(); onClose(); }}>
-    <div className="modal-heading"><h2 id={titleId}>{title}</h2><button type="button" className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={20} /></button></div>
+  return <dialog ref={ref} className={`modal ${artwork ? "illustrated-modal artwork-trigger" : ""}`} aria-labelledby={titleId} onCancel={event => { event.preventDefault(); onClose(); }}>
+    <div className="modal-heading"><h2 id={titleId}>{title}</h2>{artwork && <div className="modal-artwork" aria-hidden="true">{artwork}</div>}<button type="button" className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={20} /></button></div>
     {children}
   </dialog>;
 }
