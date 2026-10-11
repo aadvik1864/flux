@@ -1,0 +1,32 @@
+{
+  "name": "flux",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "engines": { "node": ">=22.12.0" },
+  "scripts": {
+    "build:packages": "npm run build -w @flux/shared && npm run build -w @flux/document-model && npm run build -w @flux/storage",
+    "dev": "npm run build:packages && concurrently -k -n web,api,sync -c blue,green,magenta \"npm run dev -w @flux/web\" \"npm run dev -w @flux/api\" \"npm run dev -w @flux/collaboration\"",
+    "build": "npm run build:packages && npm run build -w @flux/api && npm run build -w @flux/collaboration && npm run build -w @flux/web",
+    "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present && tsc -p tsconfig.tests.json",
+    "test": "npm run build:packages && vitest run",
+    "test:e2e": "playwright test",
+    "db:generate": "npm run db:generate -w @flux/api",
+    "db:migrate": "npm run db:migrate -w @flux/api",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.0",
+    "@types/node": "^22.0.0",
+    "concurrently": "^9.2.0",
+    "dotenv-cli": "^11.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.3.0",
+    "vitest": "4.1.11"
+  },
+  "overrides": {
+    "vite": "$vite",
+    "@prisma/config": { "deepmerge-ts": "^8.0.0" }
+  }
+}

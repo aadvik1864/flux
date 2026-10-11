@@ -1,0 +1,27 @@
+{
+  "name": "@flux/collaboration",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@flux/shared": "0.1.0",
+    "@flux/storage": "0.1.0",
+    "@flux/document-model": "0.1.0",
+    "@hocuspocus/server": "4.7.0",
+    "@prisma/client": "6.19.3",
+    "dotenv": "^17.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "yjs": "^13.6.27",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "tsx": "^4.20.0"
+  }
+}

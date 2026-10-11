@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: flux
+      POSTGRES_PASSWORD: flux_local_only
+      POSTGRES_DB: flux
+    ports:
+      - "127.0.0.1:5438:5432"
+    volumes:
+      - flux_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flux -d flux"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  object-storage:
+    image: rustfs/rustfs@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    command: /data
+    environment:
+      RUSTFS_ACCESS_KEY: flux_storage
+      RUSTFS_SECRET_KEY: flux_storage_local_only
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_OBS_LOGGER_LEVEL: error
+    ports:
+      - "127.0.0.1:9010:9000"
+      - "127.0.0.1:9011:9001"
+    volumes:
+      - flux_snapshots:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+volumes:
+  flux_postgres:
+  flux_snapshots:

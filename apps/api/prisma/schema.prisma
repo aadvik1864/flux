@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  EDITOR
+  REVIEWER
+  VIEWER
+}
+
+enum CheckpointKind {
+  MANUAL
+  BEFORE_RESTORE
+  RESTORE
+}
+
+enum ActivityKind {
+  CHECKPOINT_CREATED
+  DOCUMENT_RESTORED
+}
+
+model User {
+  id           String            @id @default(cuid())
+  name         String
+  email        String            @unique
+  passwordHash String
+  createdAt    DateTime          @default(now())
+  sessions     Session[]
+  memberships  WorkspaceMember[]
+  checkpoints  Checkpoint[]      @relation("CheckpointCreator")
+  activities   ActivityEvent[]   @relation("ActivityActor")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model Workspace {
+  id          String            @id @default(cuid())
+  name        String
+  description String            @default("")
+  createdAt   DateTime          @default(now())
+  members     WorkspaceMember[]
+  files       File[]
+  invitations Invitation[]
+  activities  ActivityEvent[]
+}
+
+model WorkspaceMember {
+  workspaceId String
+  userId      String
+  role        Role
+  joinedAt    DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@index([userId])
+}
+
+model Invitation {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  workspaceId String
+  email       String
+  role        Role
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model File {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  name         String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  mainBranchId String?   @unique
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  branches     Branch[]  @relation("FileBranches")
+  mainBranch   Branch?   @relation("MainBranch", fields: [mainBranchId], references: [id], onDelete: SetNull)
+  checkpoints  Checkpoint[]
+  activities   ActivityEvent[]
+
+  @@index([workspaceId])
+}
+
+model Branch {
+  id           String         @id @default(cuid())
+  fileId       String
+  name         String         @default("main")
+  createdAt    DateTime       @default(now())
+  file         File           @relation("FileBranches", fields: [fileId], references: [id], onDelete: Cascade)
+  mainFor      File?          @relation("MainBranch")
+  state        DocumentState?
+  generation   Int            @default(0)
+  checkpointNumber Int        @default(0)
+  checkpoints  Checkpoint[]
+
+  @@unique([fileId, name])
+}
+
+// Mutable recovery state. Immutable snapshots are referenced by Checkpoint.
+model DocumentState {
+  branchId  String   @id
+  state     Bytes
+  generation Int     @default(0)
+  revision   Int     @default(0)
+  updatedAt DateTime @updatedAt
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+}
+
+model Checkpoint {
+  id                    String         @id @default(uuid())
+  fileId                String
+  branchId              String
+  number                Int
+  title                 String
+  kind                  CheckpointKind @default(MANUAL)
+  generation            Int
+  revision              Int
+  schemaVersion         Int
+  objectKey             String         @unique
+  checksum              String
+  byteLength            Int
+  createdAt             DateTime       @default(now())
+  createdById           String?
+  createdByName         String
+  requestId             String?        @unique
+  requestHash           String?
+  sourceCheckpointId    String?
+  preservedCheckpointId String?
+  file                  File           @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  branch                Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  createdBy             User?          @relation("CheckpointCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  sourceCheckpoint      Checkpoint?    @relation("RestoredFrom", fields: [sourceCheckpointId], references: [id], onDelete: SetNull)
+  restoredAs            Checkpoint[]   @relation("RestoredFrom")
+  preservedCheckpoint   Checkpoint?    @relation("PreservedBeforeRestore", fields: [preservedCheckpointId], references: [id], onDelete: SetNull)
+  preservedBy           Checkpoint[]   @relation("PreservedBeforeRestore")
+
+  @@unique([branchId, number])
+  @@index([fileId, createdAt])
+}
+
+model ActivityEvent {
+  id          String       @id @default(cuid())
+  workspaceId String
+  fileId      String?
+  actorId     String?
+  actorName   String
+  type        ActivityKind
+  details     Json
+  createdAt   DateTime     @default(now())
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  file        File?        @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  actor       User?        @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([fileId, createdAt])
+}

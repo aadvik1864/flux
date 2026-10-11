@@ -1,0 +1,9 @@
+{
+  "name": "@flux/storage",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit" },
+  "dependencies": { "@aws-sdk/client-s3": "^3.900.0", "@flux/shared": "0.1.0", "zod": "^4.0.0" }
+}
