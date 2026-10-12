@@ -142,7 +142,21 @@ test("splitting a wrapped experiment paragraph keeps the base identity and merge
     await open(main, file.id); await open(source, file.id, branch.id);
     const editor = source.getByRole("textbox", { name: "Document content" }), blocks = editor.locator(":scope > p");
     await expect(blocks).toHaveText([original]);
-    await editor.click(); await source.keyboard.press("ControlOrMeta+End"); await source.keyboard.press("Enter");
+    // Establish the selection precondition directly. Clicking a wrapped editor
+    // and immediately sending Ctrl+End can leave the clicked caret in Chromium
+    // on a busy CI renderer, so that shortcut is not a selection precondition.
+    await blocks.last().evaluate(element => {
+      (element.closest('[contenteditable="true"]') as HTMLElement).focus();
+      const range = document.createRange(); range.selectNodeContents(element); range.collapse(false);
+      const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+    });
+    await expect.poll(() => blocks.last().evaluate(element => {
+      const selection = window.getSelection();
+      if (!selection?.isCollapsed || !selection.focusNode || !element.contains(selection.focusNode)) return -1;
+      const before = document.createRange(); before.selectNodeContents(element); before.setEnd(selection.focusNode, selection.focusOffset);
+      return before.toString().length;
+    })).toBe(original.length);
+    await source.keyboard.press("Enter");
     await expect(blocks).toHaveText([original, ""]);
     await expect(blocks.first()).toHaveAttribute("data-block-id", "intro");
     await source.keyboard.insertText("A separately added experiment conclusion.");

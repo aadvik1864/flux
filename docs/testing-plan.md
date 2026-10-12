@@ -196,6 +196,15 @@ and `/tmp/opencode/flux-ci-fixture-release-final.log`.
 The complete local browser suite also passed: 85 checks (43 Chromium and 42
 Firefox), with the same unsupported Firefox touch-emulation skip. Evidence:
 `/tmp/opencode/flux-ci-fixture-all-browsers.log`.
+Remote run `38307799354` subsequently caught the same selection assumption in
+the new narrow paragraph-splitting regression: `Enter` split at the clicked
+position rather than the expected paragraph end. That regression now establishes
+and asserts the native caret precondition explicitly before sending `Enter`;
+exact content, block identity, and empty-conflict checks remain unchanged. It
+does not test or claim reliability of immediate click/Ctrl+End sequencing.
+The explicit-caret regression passed six fresh fixtures per browser (12 checks,
+no failure retries), and type checks passed. Evidence:
+`/tmp/opencode/flux-ci-caret-repeated.log`.
 
 ## Optional integration fixture
 
