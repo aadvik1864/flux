@@ -27,7 +27,7 @@
     "@playwright/test": "^1.58.0",
     "@types/node": "^22.0.0",
     "@types/smtp-server": "^3.5.13",
-    "concurrently": "^9.2.0",
+    "concurrently": "^10.0.6",
     "dotenv-cli": "^11.0.0",
     "fake-indexeddb": "^6.2.5",
     "livekit-client": "2.22.4",
