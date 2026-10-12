@@ -25,6 +25,9 @@ accounts → private workspace → invitation → shared document → durable sa
 - Explicit restore with current-head validation and automatic preservation of main.
 - Server-generated checkpoint/restore activity events and schema/checksum checks.
 - Restore-session fencing and downloadable local drafts when changes were not acknowledged.
+- Persistent browser draft backups with explicit review/resume; older restored
+  generations are download-only and never replayed automatically.
+- Bounded retry for temporary connection failures without false access denial.
 
 **Not implemented yet:** experimental branch creation, comparison,
 merging, persistent chat, Decision Bookmarks, calls, spreadsheets, presentations,
@@ -58,6 +61,8 @@ The production Docker kit requires **invite-only signup, verified email, and
 authenticated TLS SMTP**. It delivers invitations, verification, and password
 recovery through an encrypted retryable outbox. Local demo email is disabled
 unless SMTP is configured; an email string alone is not verified identity.
+Permanent delivery failures are quarantined with redacted operator alerts and
+explicit, bounded resend commands. See the production runbook before closing or retrying a failure.
 
 ## Production deployment kit
 
@@ -80,8 +85,12 @@ backups, and the runbook's launch gate still need configuration and validation.
 6. Wait for **Saved**, then refresh both browsers. Content should recover.
 
 If the connection drops, keep the editor open until it reconnects and reports
-**Saved**. Offline edits are held in browser memory, not persisted in IndexedDB;
-closing or refreshing before acknowledgement can lose unacknowledged changes.
+**Saved**. Flux also backs up unsaved local edits in IndexedDB when browser storage
+is available. On returning, review a recovery copy before choosing to resume it.
+These are not server saves: browser eviction, cleared data, private browsing, or
+closure before a backup finishes can still lose work. Download a copy if a backup
+warning appears. Browser drafts are not encrypted by Flux; clear site data after
+using a shared device.
 
 ### Checkpoints and history
 
@@ -98,7 +107,9 @@ you refresh and review the current revision. A successful restore starts a new
 room generation: older CRDT updates are not allowed into the new session. An open
 draft with unacknowledged changes remains visible, read-only, with a download
 option before switching to current main. The JSON download is a manual recovery
-artifact; automated draft import/rebase is not implemented.
+artifact. A persisted draft from the same editing generation can be resumed after
+explicit review; a draft from before a restore is download-only. Office-file import
+and automatic cross-generation draft rebasing are not implemented.
 
 For an existing checkout, add the S3 variables from `.env.example`, run
 `npm install`, `npm run infra:up`, `npm run db:generate`, and `npm run db:migrate`
@@ -212,8 +223,9 @@ docs/                 Architecture, requirements, roadmap, testing, Office evalu
 
 ## Dependency notes
 
-Versions are locked in `package-lock.json`. Vite is constrained to the tested 7.x
-line to avoid an npm optional-peer resolution failure. Prisma 6's configuration
+Versions are locked in `package-lock.json`. Vite 8.3.4 is verified with the unit,
+browser, type/build, and production release suites; future major upgrades require
+deliberate review. Prisma 6's configuration
 dependency `deepmerge-ts` is overridden to patched 8.x; schema validation,
 client generation, and migrations must remain tested when changing this override.
 

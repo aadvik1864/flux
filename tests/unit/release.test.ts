@@ -31,6 +31,12 @@ describe("production configuration", () => {
     changed[2] = Buffer.from("altered message").toString("base64url");
     expect(() => decryptMail(changed.join("."), production.MAIL_ENCRYPTION_KEY)).toThrow();
   });
+  it("allows an optional HTTPS mail alert endpoint but rejects insecure alerts", () => {
+    expect(parseRuntimeConfig({ ...production, MAIL_ALERT_WEBHOOK_URL: "" }).MAIL_ALERT_WEBHOOK_URL).toBeUndefined();
+    expect(parseRuntimeConfig({ ...production, MAIL_ALERT_WEBHOOK_URL: "https://alerts.example.com/flux" }).MAIL_ALERT_WEBHOOK_URL).toBe("https://alerts.example.com/flux");
+    expect(() => parseRuntimeConfig({ ...production, MAIL_ALERT_WEBHOOK_URL: "http://alerts.example.com/flux" })).toThrow("HTTPS");
+    for (const url of ["https://user:password@alerts.example.com/flux", "https://alerts.example.com/flux#secret"]) expect(() => parseRuntimeConfig({ ...production, MAIL_ALERT_WEBHOOK_URL: url })).toThrow("HTTPS");
+  });
   it("seals backups, authenticates before restore, and rejects a wrong key", async () => {
     const directory = await mkdtemp("/tmp/opencode/flux-backup-unit-");
     const run = promisify(execFile);

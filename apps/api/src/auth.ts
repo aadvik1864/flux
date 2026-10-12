@@ -72,7 +72,7 @@ class CredentialThrottle implements CanActivate {
 
 @Controller("auth")
 @UseGuards(CredentialThrottle)
-class AuthController {
+export class AuthController {
   constructor(@Inject(Database) private readonly db: Database) {}
 
   private async startSession(tx: Prisma.TransactionClient, user: User) {
@@ -95,11 +95,12 @@ class AuthController {
 
   private async issue(tx: Prisma.TransactionClient, user: User, purpose: AccountTokenPurpose) {
     const token = opaqueToken();
+    const expiresAt = new Date(Date.now() + (purpose === "VERIFY_EMAIL" ? 24 * 3600_000 : 30 * 60_000));
     await tx.accountToken.deleteMany({ where: { userId: user.id, purpose } });
-    await tx.accountToken.create({ data: { tokenHash: tokenHash(token), userId: user.id, purpose, expiresAt: new Date(Date.now() + (purpose === "VERIFY_EMAIL" ? 24 * 3600_000 : 30 * 60_000)) } });
+    await tx.accountToken.create({ data: { tokenHash: tokenHash(token), userId: user.id, purpose, expiresAt } });
     const action = purpose === "VERIFY_EMAIL" ? "verify-email" : "reset-password";
     // The fragment isn't sent to HTTP servers or referrer logs. Opening it does not consume it.
-    await queueMail(tx, user.email, purpose === "VERIFY_EMAIL" ? "Verify your Flux email" : "Reset your Flux password", `${purpose === "VERIFY_EMAIL" ? "Verify your email and choose your password" : "Choose a new password"}:\n${env.APP_ORIGIN}/account/${action}#${token}\n\nIf you did not request this, ignore this message.`);
+    await queueMail(tx, user.email, purpose === "VERIFY_EMAIL" ? "Verify your Flux email" : "Reset your Flux password", `${purpose === "VERIFY_EMAIL" ? "Verify your email and choose your password" : "Choose a new password"}:\n${env.APP_ORIGIN}/account/${action}#${token}\n\nIf you did not request this, ignore this message.`, expiresAt);
   }
 
   @Get("options")
@@ -115,6 +116,16 @@ class AuthController {
     if (!env.REQUIRE_EMAIL_VERIFICATION && !data.password) throw new BadRequestException("A password is required");
     if (env.AUTH_MODE === "invite-only" && !data.invitationToken) throw new ForbiddenException("An invitation is required to create an account");
     try {
+      // Reject random/expired links before allocating password-check memory. This
+      // is only a preflight: consumption is still checked atomically below.
+      if (env.AUTH_MODE === "invite-only") {
+        const where = { tokenHash: tokenHash(data.invitationToken!), email: data.email, acceptedAt: null, expiresAt: { gt: new Date() } };
+        const [signup, workspace] = await Promise.all([
+          this.db.signupInvitation.findFirst({ where, select: { id: true } }),
+          this.db.invitation.findFirst({ where, select: { id: true } }),
+        ]);
+        if (!signup && !workspace) throw new ForbiddenException("The invitation is expired, used, or belongs to another email address");
+      }
       const passwordHash = await hashPassword(env.REQUIRE_EMAIL_VERIFICATION ? opaqueToken() : data.password!);
       const result = await this.db.$transaction(async tx => {
         if (env.AUTH_MODE === "invite-only") {
@@ -192,13 +203,13 @@ class AuthController {
   private async consume(body: unknown, purpose: AccountTokenPurpose) {
     const data = input(z.object({ token: tokenInput, password }), body);
     const hash = tokenHash(data.token);
+    const initial = await this.db.accountToken.findUnique({ where: { tokenHash: hash } });
+    if (!initial || initial.purpose !== purpose || initial.expiresAt <= new Date()) throw new BadRequestException("This link is expired or has already been used. Request a new link");
     const passwordHash = await hashPassword(data.password);
     return this.db.$transaction(async tx => {
-      const initial = await tx.accountToken.findUnique({ where: { tokenHash: hash } });
-      if (!initial || initial.purpose !== purpose) throw new BadRequestException("This link is expired or has already been used. Request a new link");
       await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "User" WHERE "id" = ${initial.userId} FOR UPDATE`);
       const token = await tx.accountToken.findUnique({ where: { tokenHash: hash } });
-      if (!token || token.expiresAt <= new Date()) throw new BadRequestException("This link is expired or has already been used. Request a new link");
+      if (!token || token.userId !== initial.userId || token.purpose !== purpose || token.expiresAt <= new Date()) throw new BadRequestException("This link is expired or has already been used. Request a new link");
       await tx.accountToken.deleteMany({ where: { userId: token.userId } });
       await tx.session.deleteMany({ where: { userId: token.userId } });
       const user = await tx.user.update({ where: { id: token.userId }, data: { passwordHash, ...(purpose === "VERIFY_EMAIL" ? { emailVerifiedAt: new Date() } : {}) } });

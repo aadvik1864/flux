@@ -76,8 +76,13 @@ model EmailMessage {
   nextAttempt DateTime @default(now())
   sentAt      DateTime?
   createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+  quarantinedAt DateTime?
+  acknowledgedAt DateTime?
+  failureKind String?
+  retryRequests Int @default(0)
 
-  @@index([sentAt, nextAttempt])
+  @@index([sentAt, quarantinedAt, nextAttempt])
 }
 
 model AuthThrottle {
@@ -92,6 +97,7 @@ model SecurityEvent {
   id        String @id @default(cuid())
   type      String
   userId    String?
+  details   Json?
   createdAt DateTime @default(now())
 
   @@index([createdAt])

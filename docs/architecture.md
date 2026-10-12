@@ -19,7 +19,10 @@ SHA-256 hashes are stored. Cookies are HttpOnly, SameSite=Lax, and Secure in
 production. Mutating API requests must carry the configured `APP_ORIGIN`.
 Production additionally requires verified email and invite-only signup. Email
 verification/reset uses expiring, hashed one-use tokens and user-row locks. SMTP
-delivery comes from an encrypted transactional outbox with retry/backoff. Password
+delivery comes from an encrypted transactional outbox with capped retry/backoff,
+permanent-failure quarantine, redacted best-effort HTTPS alerts, and audited
+operator resend/acknowledgement. Invalid invitations/account links are rejected
+before expensive password hashing; transaction-level consumption still revalidates them. Password
 changes revoke all sessions/account tokens; login rechecks the password hash under
 the same lock before creating its session.
 
@@ -59,8 +62,14 @@ create a provider. Unsupported schema versions fail explicitly.
 Debounced Hocuspocus storage is an additional recovery path. Full state includes
 deletions; a Yjs state vector alone is not proof that every deletion was persisted.
 
-Unacknowledged offline edits exist only in the open browser's memory. Durable
-offline storage and exact keystroke attribution are not implemented.
+Unacknowledged local edits are additionally backed up in IndexedDB when available,
+separated by account, document, editing generation, and mounted session. Writes are
+coalesced and version-checked acknowledgements cannot erase newer drafts or another
+tab's copy. Recovery after reopening requires explicit read-only review and resume;
+old generations are download-only. Browser backups have quotas and no retention
+guarantee, are not encrypted by Flux, and do not count as server saves. Explicit
+logout fences late writes and attempts account-specific cleanup across browser
+tabs. Exact keystroke attribution is not implemented.
 
 ## Scaling boundary
 

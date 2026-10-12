@@ -43,7 +43,7 @@ override.write_text(f"""services:
       default:
         aliases: [flux.example.com]
   api:
-    environment: {{ NODE_EXTRA_CA_CERTS: /certs/cert.pem }}
+    environment: {{ NODE_EXTRA_CA_CERTS: /certs/cert.pem, MAIL_ALERT_WEBHOOK_URL: "https://inbox:8443/alerts" }}
     volumes: ["{directory}/cert.pem:/certs/cert.pem:ro"]
   tools:
     environment: {{ NODE_EXTRA_CA_CERTS: /certs/cert.pem }}
@@ -89,6 +89,7 @@ try:
     run(compose + ["run", "--rm", "migrate"])
     run(compose + ["up", "-d", "--wait", "collaboration", "api", "web", "gateway"])
     run(compose + ["run", "--rm", "--no-deps", "tools", "node", "dist/operations.js", "smtp-check"])
+    run(compose + ["run", "--rm", "--no-deps", "tools", "node", "/app/tests/release/check-mail.mjs"])
     run(compose + ["run", "--rm", "--no-deps", "tools", "node", "dist/operations.js", "invite", "owner@example.com"])
     # Browser networking is namespaced: unrelated host Docker interfaces cannot
     # interrupt Chromium with ERR_NETWORK_CHANGED. Never retry mutations to hide it.

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { PublicUser } from "@flux/shared";
 import { api, ApiError, errorMessage } from "../lib/api";
 import { WorkspaceArtwork } from "./work-art";
+import { allowAccountDrafts, blockAccountDrafts, clearAccountDrafts } from "../lib/local-drafts";
 
 const SessionContext = createContext<{
   user: PublicUser | null;
@@ -35,6 +36,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const account = await api<PublicUser>("/auth/me", { signal: controller.signal });
       if (pendingCheck.current !== controller) return;
       if (!account || typeof account.id !== "string") throw new Error("The server returned an invalid account response");
+      allowAccountDrafts(account.id);
       setUser(account);
     }
     catch (error) {
@@ -51,9 +53,33 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const setAccount = (account: PublicUser | null) => {
     // Login/logout is newer than a check started before that action. Do not let
     // its delayed response overwrite the account or keep navigation loading.
+    if (account) allowAccountDrafts(account.id);
     cancelCheck(); setError(""); setUser(account); setLoading(false);
   };
-  const signOut = async () => { await api("/auth/logout", { method: "POST" }); setAccount(null); };
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel("flux-account-lifecycle");
+    channel.onmessage = event => {
+      if (user && event.data?.type === "signed-out" && event.data.userId === user.id) {
+        blockAccountDrafts(user.id); cancelCheck(); setUser(null); setError(""); setLoading(false);
+        void clearAccountDrafts(user.id).catch(() => {});
+      }
+    };
+    return () => channel.close();
+  }, [user, cancelCheck]);
+  const signOut = async () => {
+    const accountId = user?.id;
+    await api("/auth/logout", { method: "POST" });
+    if (accountId) {
+      blockAccountDrafts(accountId);
+      if (typeof BroadcastChannel !== "undefined") {
+        const channel = new BroadcastChannel("flux-account-lifecycle");
+        channel.postMessage({ type: "signed-out", userId: accountId }); channel.close();
+      }
+    }
+    setAccount(null);
+    if (accountId) await clearAccountDrafts(accountId).catch(() => {});
+  };
   return <SessionContext.Provider value={{ user, loading, error, refresh, setUser: setAccount, signOut }}>{children}</SessionContext.Provider>;
 }
 

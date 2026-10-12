@@ -115,6 +115,29 @@ try {
   const head = await request(page, `/files/${file.data.id}/history-head`, undefined, "GET");
   assert.equal(head.status, 200);
   await page.screenshot({ path: `${directory}/production-editor.png`, fullPage: true });
+  // Exercise IndexedDB recovery under the actual HTTPS/CSP production build, not
+  // just development. Closing a dirty tab must not replay its draft on reopening.
+  const draftFile = await request(page, `/workspaces/${workspaceId}/files`, { name: "Browser recovery acceptance" });
+  assert.equal(draftFile.status, 201);
+  const draftPage = await context.newPage(); await draftPage.goto(`/files/${draftFile.data.id}`);
+  const draftEditor = draftPage.getByRole("textbox", { name: "Document content", exact: true });
+  await expect(draftEditor).toBeVisible(); await draftEditor.fill("Production browser recovery baseline.");
+  await expect(draftPage.locator(".save-status")).toHaveText("Saved");
+  await context.setOffline(true); await draftEditor.fill("A production browser draft requires explicit recovery.");
+  await expect(draftPage.locator(".browser-backup-status")).toContainText("Browser backup saved");
+  await draftPage.close(); await context.setOffline(false);
+  const reviewPage = await context.newPage(); await reviewPage.goto(`/files/${draftFile.data.id}`);
+  const sharedEditor = reviewPage.getByRole("textbox", { name: "Document content", exact: true });
+  await expect(sharedEditor).toContainText("recovery baseline"); await expect(sharedEditor).not.toContainText("requires explicit recovery");
+  await expect(reviewPage.locator(".save-status")).toHaveText("Saved");
+  await reviewPage.getByRole("button", { name: /Review browser draft/ }).click();
+  await expect(reviewPage.getByRole("textbox", { name: "Browser draft content" })).toContainText("requires explicit recovery");
+  await expect(reviewPage.getByRole("textbox", { name: "Browser draft content" })).toHaveAttribute("contenteditable", "false");
+  await reviewPage.getByRole("button", { name: "Resume browser draft", exact: true }).click();
+  await expect(sharedEditor).toContainText("requires explicit recovery"); await expect(reviewPage.locator(".save-status")).toHaveText("Saved");
+  await expect(reviewPage.getByRole("button", { name: /Review browser draft/ })).toHaveCount(0);
+  const draftHead = await request(reviewPage, `/files/${draftFile.data.id}/history-head`, undefined, "GET");
+  assert.equal(draftHead.status, 200); await reviewPage.close();
   const invitation = await request(page, `/workspaces/${workspaceId}/invitations`, { email: "member@example.com", role: "VIEWER" });
   assert.equal(invitation.status, 201);
   const memberLink = await emailLink("member@example.com", /https:\/\/flux\.example\.com:9443\/invite\/[A-Za-z0-9_-]{43}/);
@@ -159,11 +182,12 @@ try {
   for (let attempt = 0; attempt < 10; attempt += 1) assert.equal((await request(recoveryPage, "/auth/login", { email: "throttled@example.com", password: "wrong password" })).status, 401);
   assert.equal((await request(recoveryPage, "/auth/login", { email: "throttled@example.com", password: "wrong password" })).status, 429);
   assert.equal((await request(recoveryPage, "/AUTH/LOGIN/", { email: "Throttled@EXAMPLE.com", password: "wrong password" })).status, 429);
-  const result = { workspaceId, fileId: file.data.id, contentHash: head.data.contentHash, generation: head.data.generation };
+  const result = { workspaceId, fileId: file.data.id, contentHash: head.data.contentHash, generation: head.data.generation,
+    draftFileId: draftFile.data.id, draftContentHash: draftHead.data.contentHash, draftGeneration: draftHead.data.generation };
   await writeFile(`${directory}/state.json`, JSON.stringify(result), { mode: 0o600 });
   assert.deepEqual(violations, []);
   await recoveryContext.close();
-  console.log("Production HTTPS/browser checks passed: invitation, SMTP/TLS, verification, reset races, sessions, CSP, roles, eight-client convergence, durable save, and checkpoint.");
+  console.log("Production HTTPS/browser checks passed: invitation, SMTP/TLS, verification, reset races, sessions, CSP, roles, eight-client convergence, durable save, checkpoint, and explicit browser-draft recovery.");
 } catch (error) {
   await writeFile(`${diagnostics}/browser.json`, JSON.stringify({ networkFailures, violations }, null, 2), { mode: 0o600 });
   await Promise.allSettled(browser.contexts().flatMap(context => context.pages()).map((page, index) => page.screenshot({ path: `${diagnostics}/failure-page-${index}.png`, fullPage: true })));

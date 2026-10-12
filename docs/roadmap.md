@@ -25,9 +25,10 @@ correctness and acceptance criteria rather than calendar dates.
 - [x] Automated history acceptance, integrity/schema checks, and offline draft recovery.
 
 Exit gate passed: earlier states can be revisited without changing current content.
-Verification: 39 unit tests, 13 browser acceptance tests, type checks, production
-build, and a dependency audit with zero reported vulnerabilities. This remains a
-development preview, not completed V1 or production-readiness certification.
+Current verification: 75 unit tests, 32 Chromium and 31 Firefox acceptance tests
+(one unsupported Firefox touch test skipped), type checks, production builds,
+dependency audit, and the isolated Docker/HTTPS/SMTP/restore exercise. This is not
+completed V1 or production-readiness certification; operator launch gates remain.
 
 ## Next: branch review and safe merging
 
@@ -60,6 +61,9 @@ spreadsheets/presentations and file-level snapshots; document format limitations
 - [x] Non-root Docker kit, HTTPS gateway, private services, dependency health checks.
 - [x] Production collaboration singleton lease and graceful drain.
 - [x] Authenticated encrypted cold backup/restore tooling with empty-target guards.
+- [x] Persistent browser drafts, explicit recovery, and transient-outage retry.
+- [x] Invalid-link password-work preflights, mail quarantine, independent HTTPS
+  notification hooks, and controlled operator resend/acknowledgement.
 - [ ] Real hosting/domain/SMTP identity and delivery configured by the operator.
 - [ ] External monitoring/alerts and off-host backup custody on the target host.
 - [ ] Target-host sustained load, device coverage, privacy/deletion/export procedures.

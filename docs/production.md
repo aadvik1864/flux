@@ -64,10 +64,40 @@ tokens; active collaboration authorization catches revocation within about five
 seconds. Recovery requests return the same notice for eligible/unknown addresses.
 
 SMTP delivery uses an encrypted, database-transactional outbox. A single API worker
-retries failures with capped exponential backoff, erases payloads after delivery,
+retries temporary failures with capped exponential backoff (at most 12 attempts), erases payloads after delivery,
 and logs message IDs rather than addresses/links. Delivery is at-least-once, so a
 crash after SMTP acceptance can produce a duplicate email. An older verification
 link becomes invalid when a new one is requested. Do not scale the API worker.
+
+### Mail quarantine and controlled resend
+
+SMTP 5xx rejections, authentication failures, unreadable payloads, and exhausted
+retries go into quarantine rather than retrying forever. Expired links are not sent;
+their payloads are erased. The migration cannot infer expiry for older queued mail,
+so those messages are quarantined and erased too: request fresh links after upgrading.
+Unacknowledged quarantine makes `/ready` fail immediately. Structured logs and
+security events contain message IDs/failure categories, never recipients or links.
+
+Optionally set `MAIL_ALERT_WEBHOOK_URL` to an **HTTPS** endpoint accepting a JSON POST
+with `service`, `event`, `messageId`, `kind`, and `attempts`. The request validates TLS,
+does not follow redirects, and has a five-second timeout. This is a best-effort
+notification, not a durable alert-delivery queue: also monitor readiness and
+`mail_alert_failed` logs through an independent channel. Endpoint credentials, if
+included in the URL path/query, belong in the protected production environment
+only. URL userinfo (Basic credentials) and fragments are rejected.
+
+```bash
+docker compose --env-file deploy/production.env -f deploy/compose.prod.yaml run --rm --no-deps tools node dist/operations.js mail-status
+# Diagnose and fix SMTP first. Choose ONE action for the message ID from status:
+docker compose --env-file deploy/production.env -f deploy/compose.prod.yaml run --rm --no-deps tools node dist/operations.js mail-retry MESSAGE_ID --confirm-resend
+docker compose --env-file deploy/production.env -f deploy/compose.prod.yaml run --rm --no-deps tools node dist/operations.js mail-acknowledge MESSAGE_ID --confirm-close
+```
+
+Retry is row-locked, audited, and limited to three explicit resend requests per
+message. It requires an unexpired, readable retained payload. Sent, expired, or
+acknowledged messages cannot be resent; request a fresh recovery link or invitation
+instead. Acknowledge closes the failure and erases the payload, without delivery.
+Status shows at most 100 open quarantines; repeat after resolving those shown.
 
 ## Health, limits, and alerts
 
@@ -76,7 +106,7 @@ link becomes invalid when a new one is requested. Do not scale the API worker.
   two active checks and 16 queued checks per API process; excess load gets 503
   instead of allocating unbounded native memory.
 - API `/health`: liveness. `/ready`: database, snapshot bucket, sync readiness,
-  and no undelivered mail older than 15 minutes. Public prefix is `/api`.
+  no pending mail older than 15 minutes, and no unacknowledged quarantines. Public prefix is `/api`.
 - Collaboration `/ready`: private database/storage readiness. The public gateway
   accepts only WebSocket upgrades under `/sync`; `/internal/*` is not public.
 - Docker restarts exited services, **not merely unhealthy ones**. Add an external
@@ -109,7 +139,8 @@ docker compose --env-file deploy/production.env -f deploy/compose.prod.yaml run 
 
 It removes expired sessions/account tokens/throttles, old signup invitations and
 mail rows (30 days), and security events after 90 days. Document/checkpoint data
-is not deleted. Failed checkpoint commits can leave orphan storage objects; monitor
+is not deleted. It also erases expired quarantined payloads; run it daily even when
+delivery is healthy. Failed checkpoint commits can leave orphan storage objects; monitor
 physical storage separately from referenced-byte quotas. Do not automatically
 delete objects based only on an unreviewed inventory or bucket lifecycle rule.
 
@@ -167,6 +198,9 @@ Caddy's certificates. A fresh gateway can obtain new public certificates.
 
 ## Launch gate
 
+Record actual evidence using `docs/launch-checklist.md`. These gates require the
+operator's server, domain, SMTP identity, and decisions; local fixtures cannot satisfy them.
+
 - [ ] Real domain/server/firewall configured; trusted public HTTPS/WSS tested.
 - [ ] Real SMTP identity/delivery tested, SPF/DKIM/DMARC and recovery verified.
 - [ ] Independently generated secrets and off-host configuration/key custody.
@@ -185,6 +219,20 @@ secrets and local certificates; ports 9443/8028 must be free. It deletes only th
 test projects' volumes. Never substitute your live environment into this test.
 
 The current scope still excludes branches/merging, chat, calls, spreadsheets, and
-presentations. Offline drafts are memory-only; users must wait for **Saved** before
-closing the editor. There is no WORM guarantee, automated Office/draft import,
+presentations. Users must wait for **Saved** before closing the editor. IndexedDB
+backs up unacknowledged local edits when available (8 MiB/draft, 32 MiB/account,
+64 MiB/browser, 64 records). Capacity exhaustion never silently evicts a draft;
+users get a warning and can download or discard copies. On returning, drafts require
+explicit review/resume; drafts from a different room generation are download-only.
+Live-session reconnection still synchronizes edits in the same generation normally.
+Transient token/file outages have bounded retry and a manual retry button, not false
+access denial; actual authorization failures stop reconnection.
+
+Browser drafts are **not encrypted by Flux** and account separation is an application
+boundary, not protection against someone controlling the browser profile. They have
+no guaranteed retention: browser eviction, cleared data, private browsing, or closure
+before a backup completes can lose work. Explicit logout attempts account-specific
+cleanup and broadcasts logout to same-browser tabs; purge failures are best-effort.
+Shared-device users should clear site data after use. A server-side password reset
+revokes access but cannot remotely erase offline browser data. There is no WORM guarantee, automated Office import,
 automated account deletion/export, or zero-downtime/distributed recovery.

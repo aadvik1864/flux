@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ribbonMotionBlend } from "./ribbon-motion";
 
 export type RibbonScene = { rotate: () => void; setMode: (mode: "draft" | "checkpoint") => void; setVisible: (visible: boolean) => void; dispose: () => void };
 
@@ -85,12 +86,16 @@ export function createRibbonScene(canvas: HTMLCanvasElement, host: HTMLElement, 
   let arrangement = 0;
   let targetArrangement = 0;
   const target = { x: -.14, y: angle };
-  const render = () => {
+  let started = performance.now();
+  let previous = started;
+  const render = (now: number) => {
     frame = 0;
     if (disposed || !visible || document.hidden) return;
-    sculpture.rotation.x += (target.x - sculpture.rotation.x) * .09;
-    sculpture.rotation.y += (target.y - sculpture.rotation.y) * .09;
-    arrangement += (targetArrangement - arrangement) * .09;
+    const blend = ribbonMotionBlend(now - started, now - previous);
+    previous = now;
+    sculpture.rotation.x += (target.x - sculpture.rotation.x) * blend;
+    sculpture.rotation.y += (target.y - sculpture.rotation.y) * blend;
+    arrangement += (targetArrangement - arrangement) * blend;
     inner.rotation.z = .45 - arrangement * .75;
     inner.rotation.y = .7 - arrangement * .5;
     inner.position.x = .25 + arrangement * .25;
@@ -100,7 +105,10 @@ export function createRibbonScene(canvas: HTMLCanvasElement, host: HTMLElement, 
       frame = requestAnimationFrame(render); canvas.dataset.motion = "active";
     } else canvas.dataset.motion = "idle";
   };
-  const wake = () => { if (!frame && !disposed && visible && !document.hidden) frame = requestAnimationFrame(render); };
+  const wake = () => {
+    started = performance.now(); previous = started;
+    if (!frame && !disposed && visible && !document.hidden) { canvas.dataset.motion = "active"; frame = requestAnimationFrame(render); }
+  };
   const resize = () => {
     const { width, height } = canvas.getBoundingClientRect();
     if (!width || !height) return;

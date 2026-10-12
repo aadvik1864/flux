@@ -19,6 +19,7 @@ export const runtimeSchema = z.object({
   SMTP_SECURE: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
+  MAIL_ALERT_WEBHOOK_URL: z.preprocess(value => value === "" ? undefined : value, z.url().optional()),
 });
 
 export function parseRuntimeConfig(environment: Record<string, unknown>) {
@@ -29,6 +30,10 @@ export function parseRuntimeConfig(environment: Record<string, unknown>) {
     throw new Error("SMTP requires SMTP_HOST, MAIL_FROM, and a 64-hex-character MAIL_ENCRYPTION_KEY");
   }
   if (env.REQUIRE_EMAIL_VERIFICATION && env.MAIL_MODE !== "smtp") throw new Error("Email verification requires SMTP");
+  if (env.MAIL_ALERT_WEBHOOK_URL) {
+    const webhook = new URL(env.MAIL_ALERT_WEBHOOK_URL);
+    if (webhook.protocol !== "https:" || webhook.username || webhook.password || webhook.hash) throw new Error("Mail alerts require HTTPS without URL userinfo or fragments");
+  }
   if (env.NODE_ENV === "production") {
     const database = new URL(env.DATABASE_URL);
     if (!["postgresql:", "postgres:"].includes(database.protocol) || decodeURIComponent(database.password).length < 32 || /local_only|replace|example/i.test(database.password)) throw new Error("Production requires non-example PostgreSQL credentials of at least 32 characters");

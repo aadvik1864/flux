@@ -78,7 +78,7 @@ class WorkspacesController {
       const invitation = await tx.invitation.create({ data: {
         workspaceId: id, ...data, tokenHash: tokenHash(token), expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
       } });
-      await queueMail(tx, data.email, "Join your team on Flux", `You have been invited to a private Flux workspace. Sign in or verify your email to join:\n${env.APP_ORIGIN}/invite/${token}\n\nThis invitation expires in 48 hours.`);
+      await queueMail(tx, data.email, "Join your team on Flux", `You have been invited to a private Flux workspace. Sign in or verify your email to join:\n${env.APP_ORIGIN}/invite/${token}\n\nThis invitation expires in 48 hours.`, invitation.expiresAt);
       await tx.securityEvent.create({ data: { type: "workspace_invitation_created", userId: request.identity.user.id } });
       return invitation;
     });

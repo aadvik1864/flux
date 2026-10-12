@@ -359,7 +359,7 @@ textarea { resize: vertical; }
 .action-artwork > svg { width: 100%; height: 100%; }
 .checkpoint-notice { padding: 9px 23px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--green); background: var(--success-bg); border-bottom: 1px solid var(--line); font-size: 12px; }
 .checkpoint-notice a { margin-left: auto; text-decoration: underline; }
-.draft-recovery-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.draft-recovery-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 
 /* History separates the immutable timeline from the document, never a live editor. */
 .history-shell { min-height: 100dvh; }
@@ -724,3 +724,9 @@ kbd { font: inherit; padding: 1px 4px; border: 1px solid var(--line); border-rad
   *, *:before, *:after { animation: none !important; transition: none !important; }
   .spotlight-light { display: none; }
 }
+.draft-recovery, .browser-backup-status { margin: 12px clamp(12px, 3vw, 40px); padding: 14px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.draft-recovery p, .browser-backup-status p { margin: 4px 0 10px; color: var(--muted); }
+.draft-recovery-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.draft-recovery-list time { display: block; font-size: 12px; color: var(--muted); }
+.draft-preview { border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+.draft-preview .document-content { min-height: 0; max-height: 42vh; overflow: auto; padding: 16px; }

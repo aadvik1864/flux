@@ -16,6 +16,9 @@ import { useSession } from "./session";
 import { Avatar, ErrorNotice, FluxMark, Modal } from "./ui";
 import { ThemeToggle } from "./theme";
 import { CheckpointArtwork, DocumentArtwork, HistoryArtwork } from "./work-art";
+import { LocalDraftWriter, readLocalDrafts, removeLocalDraft, type LocalDraft } from "../lib/local-drafts";
+import { documentRetryDelay, isDocumentAccessError } from "../lib/document-retry";
+import { DraftRecovery } from "./draft-recovery";
 
 type SaveStatus = "connecting" | "syncing" | "saved" | "offline" | "error";
 type Connection = { document: Y.Doc; provider: HocuspocusProvider };
@@ -35,33 +38,89 @@ export function DocumentPage({ fileId }: { fileId: string }) {
   const [checkpointError, setCheckpointError] = useState("");
   const [lastCheckpoint, setLastCheckpoint] = useState<CheckpointSummary | null>(null);
   const [wide, setWide] = useState(false);
+  const [drafts, setDrafts] = useState<LocalDraft[]>([]);
+  const [backupStatus, setBackupStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [backupError, setBackupError] = useState("");
   const dirty = useRef(false);
   const editorRef = useRef<Editor | null>(null);
   const checkpointRequestId = useRef("");
   const setEditor = useCallback((editor: Editor | null) => { editorRef.current = editor; }, []);
   const retrySave = useRef<() => void>(() => {});
+  const retryConnection = useRef<() => void>(() => {});
+  const resumeDraft = useRef<(draft: LocalDraft) => Promise<void>>(async () => {});
   const { user } = useSession();
 
   useEffect(() => {
     if (!user) return;
+    const account = user;
     let active = true;
     let provider: HocuspocusProvider | undefined;
     let document: Y.Doc | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const cancelled = new AbortController();
+    let connecting = false;
+    let retryAttempts = 0;
+    let blocked = false;
+    let restored = false;
+    let tokenFailure: "transient" | "access" | null = null;
+    let writer: LocalDraftWriter | undefined;
+    let backup: Promise<void> = Promise.resolve();
+    let backupTimer: ReturnType<typeof setTimeout> | undefined;
+    let localChanges = false;
+    const resumed: LocalDraft[] = [];
     let generation = 0;
     let pendingId = "";
     let pendingGeneration = -1;
     let online = false;
-    setFile(null); setConnection(null); setReady(false); setStatus("connecting"); setError(""); setAccessDenied(false); setRetired(false);
+    setFile(null); setConnection(null); setReady(false); setStatus("connecting"); setError(""); setAccessDenied(false); setRetired(false); setDrafts([]); setBackupStatus("idle"); setBackupError("");
     dirty.current = false;
+
+    function persistDraft() {
+      clearTimeout(backupTimer);
+      if (!writer || !document || !dirty.current || !localChanges) return;
+      const version = generation;
+      if (active) setBackupStatus("saving");
+      backup = writer.save(Y.encodeStateAsUpdate(document), version);
+      void backup.then(() => {
+        if (active && dirty.current && version === generation) { setBackupStatus("saved"); setBackupError(""); }
+      }).catch(() => {
+        if (active) { setBackupStatus("error"); setBackupError("Browser backup could not be saved. Keep this page open and download your draft before closing it."); }
+      });
+    }
 
     function handleRestore() {
       if (!active) return;
-      online = false; clearTimeout(timer); provider?.disconnect();
+      restored = true; online = false; clearTimeout(timer); clearTimeout(retryTimer); provider?.configuration.websocketProvider.disconnect();
       if (dirty.current) {
         setRetired(true); setStatus("offline");
         setError("Main was restored while this draft had unacknowledged changes. Your local text is still visible below. Download a copy before opening the current revision.");
       } else setConnectionVersion(value => value + 1);
+    }
+
+    function reconnect() {
+      if (!active || blocked || restored || connecting || !navigator.onLine) return;
+      clearTimeout(retryTimer);
+      setStatus("connecting");
+      if (provider) void provider.configuration.websocketProvider.connect();
+      else void connect();
+    }
+
+    function scheduleRetry() {
+      clearTimeout(retryTimer);
+      if (active && !blocked && !restored && retryAttempts < 5) retryTimer = setTimeout(reconnect, documentRetryDelay(retryAttempts++));
+    }
+    retryConnection.current = () => { retryAttempts = 0; reconnect(); };
+
+    function connectionFailure(error: unknown) {
+      if (!active || restored) return;
+      online = false; clearTimeout(timer);
+      blocked = isDocumentAccessError(error);
+      tokenFailure = blocked ? "access" : "transient";
+      provider?.configuration.websocketProvider.disconnect();
+      setAccessDenied(blocked); setStatus("error");
+      setError(blocked ? "Document access is unavailable. Return to the workspace or sign in again." : "The connection was interrupted. Your draft stays here. Flux will retry; you can also retry the connection below.");
+      if (!blocked) scheduleRetry();
     }
 
     function scheduleSave() {
@@ -77,35 +136,51 @@ export function DocumentPage({ fileId }: { fileId: string }) {
     retrySave.current = scheduleSave;
 
     async function connect() {
+      if (!active || connecting || provider) return;
+      connecting = true;
       try {
-        const detail = await api<FileDetail>(`/files/${fileId}`);
+        const detail = await api<FileDetail>(`/files/${fileId}`, { signal: AbortSignal.any([cancelled.signal, AbortSignal.timeout(10_000)]) });
         if (!active) return;
         setFile(detail);
+        try { const stored = await readLocalDrafts(account.id, fileId); if (active) setDrafts(stored); }
+        catch { if (active) { setBackupStatus("error"); setBackupError("Browser backups are unavailable. Keep the editor open until Saved, or download a copy before leaving."); } }
+        if (!active) return;
         document = new Y.Doc();
+        if (can(detail.role, "edit")) writer = new LocalDraftWriter({ id: crypto.randomUUID(), userId: account.id, fileId, branchId: detail.mainBranchId, fileName: detail.name, generation: detail.generation });
         provider = new HocuspocusProvider({
           url: process.env.NEXT_PUBLIC_COLLABORATION_URL ?? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/sync`,
           name: branchRoom(detail.mainBranchId, detail.generation),
           document,
           token: async () => {
+            tokenFailure = null;
             try {
-              const credential = await api<{ token: string; room: string }>(`/files/${fileId}/collaboration-token`, { method: "POST" });
-              if (credential.room !== branchRoom(detail.mainBranchId, detail.generation)) { handleRestore(); return ""; }
+              const credential = await api<{ token: string; room: string }>(`/files/${fileId}/collaboration-token`, { method: "POST", signal: AbortSignal.any([cancelled.signal, AbortSignal.timeout(10_000)]) });
+              if (!active) throw new Error("Connection closed");
+              if (credential.room !== branchRoom(detail.mainBranchId, detail.generation)) { handleRestore(); throw new Error("Editing session changed"); }
               return credential.token;
             }
             catch (error) {
-              if (active) { setError(errorMessage(error)); setStatus("error"); setAccessDenied(true); }
-              return "";
+              connectionFailure(error);
+              throw error;
             }
           },
           onStatus({ status }) {
-            if (!active) return;
-            online = status === "connected";
-            setStatus(online ? "syncing" : status === "connecting" ? "connecting" : "offline");
-            if (online) scheduleSave();
+            if (!active || blocked || restored || tokenFailure === "transient") return;
+            // A connected socket is not authenticated and cannot acknowledge saves yet.
+            online = false;
+            setStatus(status === "connected" ? "syncing" : status === "connecting" ? "connecting" : "offline");
+          },
+          onAuthenticated() {
+            if (!active || blocked || restored) return;
+            online = true; tokenFailure = null; retryAttempts = 0; clearTimeout(retryTimer);
+            setAccessDenied(false); setStatus("syncing"); setError(""); scheduleSave();
           },
           onSynced() { if (active) { setReady(true); scheduleSave(); } },
           onAuthenticationFailed() {
-            if (active) { setError("Document access was denied. Return to the workspace or sign in again."); setStatus("error"); setAccessDenied(true); }
+            if (!active || restored || tokenFailure === "transient") return;
+            blocked = true; online = false; clearTimeout(retryTimer); clearTimeout(timer);
+            provider?.configuration.websocketProvider.disconnect();
+            setError("Document access was denied. Return to the workspace or sign in again."); setStatus("error"); setAccessDenied(true);
           },
           onAwarenessChange() {
             if (!active || !provider) return;
@@ -125,24 +200,55 @@ export function DocumentPage({ fileId }: { fileId: string }) {
               if (message.type === "save-failed") {
                 setStatus("error"); setError("Saving failed. Keep this page open and retry when the server is available.");
               } else if (message.type === "saved" && pendingGeneration === generation && online) {
-                dirty.current = false; setStatus("saved"); setError("");
+                dirty.current = false; localChanges = false; clearTimeout(backupTimer); setStatus("saved"); setError("");
+                setBackupStatus("idle");
+                void writer?.acknowledge(generation).catch(() => { if (active) setBackupError("Saved to the server, but the old browser backup could not be cleared."); });
+                for (const draft of resumed.splice(0)) void removeLocalDraft(draft.id, draft.version).then(() => {
+                  if (active) setDrafts(current => current.filter(record => record.id !== draft.id || record.version !== draft.version));
+                }).catch(() => { if (active) setBackupError("Saved to the server, but an older recovery copy remains in this browser."); });
               }
             } catch { /* Ignore unknown stateless messages. */ }
           },
         });
-        provider.setAwarenessField("user", { id: user!.id, name: user!.name, color: user!.color });
-        document.on("update", () => {
+        provider.setAwarenessField("user", { id: account.id, name: account.name, color: account.color });
+        document.on("update", (_update, origin) => {
           generation += 1;
           dirty.current = true;
+          if (origin !== provider) localChanges = true;
           if (active) setStatus(online ? "syncing" : "offline");
+          if (localChanges && can(detail.role, "edit")) {
+            if (active) setBackupStatus("saving");
+            clearTimeout(backupTimer); backupTimer = setTimeout(persistDraft, 100);
+          }
           scheduleSave();
         });
+        resumeDraft.current = async draft => {
+          if (!active || !document || !online || blocked || restored || !can(detail.role, "edit") || draft.userId !== account.id || draft.fileId !== fileId || draft.branchId !== detail.mainBranchId || draft.generation !== detail.generation) throw new Error("This draft cannot be resumed into this editing session");
+          resumed.push(draft);
+          Y.applyUpdate(document, draft.state, "browser-draft-recovery");
+          // Even an already-present update requires a durable acknowledgement.
+          if (!dirty.current) { generation += 1; dirty.current = true; setStatus("syncing"); }
+          localChanges = true; persistDraft();
+          scheduleSave();
+          await backup;
+        };
         setConnection({ document, provider });
-      } catch (error) { if (active) { setError(errorMessage(error)); setStatus("error"); } }
+      } catch (error) { connectionFailure(error); }
+      finally { connecting = false; }
     }
+    const onlineAgain = () => { if (!blocked && !restored) { retryAttempts = 0; reconnect(); } };
+    const offlineNow = () => {
+      online = false; clearTimeout(timer); clearTimeout(retryTimer);
+      provider?.configuration.websocketProvider.disconnect();
+      if (active && !blocked && !restored) setStatus("offline");
+    };
+    window.addEventListener("online", onlineAgain);
+    window.addEventListener("offline", offlineNow);
+    window.addEventListener("pagehide", persistDraft);
     void connect();
     return () => {
-      active = false; clearTimeout(timer); retrySave.current = () => {};
+      persistDraft(); active = false; cancelled.abort(); clearTimeout(timer); clearTimeout(retryTimer); retrySave.current = () => {}; retryConnection.current = () => {}; resumeDraft.current = async () => { throw new Error("Document closed"); };
+      window.removeEventListener("online", onlineAgain); window.removeEventListener("offline", offlineNow); window.removeEventListener("pagehide", persistDraft);
       provider?.destroy(); document?.destroy();
     };
   }, [fileId, user, connectionVersion]);
@@ -177,7 +283,9 @@ export function DocumentPage({ fileId }: { fileId: string }) {
   return <main className={`editor-shell ${wide ? "wide-editor" : ""}`}>
     <header className="editor-topbar"><div className="editor-heading"><Link href={file ? `/workspaces/${file.workspaceId}` : "/"} className="icon-button" aria-label="Back to workspace" onClick={event => { if (dirty.current && !window.confirm("Some changes are not saved yet. Leave this document?")) event.preventDefault(); }}><ArrowLeft size={20} /></Link><Link href="/" className="editor-brand"><FluxMark /></Link><span className="header-divider" /><div className="editor-document-identity" data-tone="orchid"><DocumentArtwork /><div><span className="document-workspace">{file?.workspaceName ?? "Workspace"}</span><h1>{file?.name ?? "Opening document…"}</h1></div></div></div><div className="editor-header-tools"><div className="editor-collaborators" aria-label="Active collaborators">{people.map(person => <Avatar user={person} key={person.id} size="small" />)}<span>{people.length ? `${people.length} here` : "Connecting"}</span></div><ThemeToggle /></div></header>
     <div className="document-subbar"><span className="branch-label"><GitBranch size={15} />main</span><span className="document-mode">{file && !can(file.role, "edit") ? "Read-only" : "Shared document"}</span><div className="document-history-actions">{file && can(file.role, "edit") && <button className="history-action artwork-trigger" disabled={!ready || status !== "saved" || retired || accessDenied} onClick={() => { checkpointRequestId.current = crypto.randomUUID(); setCheckpointError(""); setCheckpointOpen(true); }}><span className="action-artwork"><CheckpointArtwork /></span>Save checkpoint</button>}<Link href={`/files/${fileId}/history`} className="history-action artwork-trigger" onClick={event => { if (dirty.current && !window.confirm("Some changes are not saved. Keep editing until Saved, or leave this draft?")) event.preventDefault(); }}><span className="action-artwork"><HistoryArtwork /></span>History</Link></div><span className={`save-status ${status}`} role="status">{status === "saved" ? <Check size={15} /> : status === "offline" ? <WifiOff size={15} /> : status === "error" ? <AlertCircle size={15} /> : <LoaderCircle size={15} className="spin" />}{statusLabel}</span></div>
-    {error && <div className="editor-error"><ErrorNotice message={error} />{retired ? <div className="draft-recovery-actions"><button className="button secondary" onClick={downloadDraft}><Download size={16} />Download local draft</button><button className="button primary" onClick={() => { if (!dirty.current || window.confirm("Open the restored revision? Download a copy first if you want to keep this local draft.")) setConnectionVersion(value => value + 1); }}>Open current revision</button></div> : connection && !accessDenied && <button className="button secondary" onClick={() => { setStatus("syncing"); retrySave.current(); }}>Retry save</button>}</div>}
+    {error && <div className="editor-error"><ErrorNotice message={error} />{retired ? <div className="draft-recovery-actions"><button className="button secondary" onClick={downloadDraft}><Download size={16} />Download local draft</button><button className="button primary" onClick={() => { if (!dirty.current || window.confirm("Open the restored revision? Download a copy first if you want to keep this local draft.")) setConnectionVersion(value => value + 1); }}>Open current revision</button></div> : !accessDenied && <button className="button secondary" onClick={() => { if (connection?.provider.isAuthenticated) { setStatus("syncing"); retrySave.current(); } else retryConnection.current(); }}>{connection?.provider.isAuthenticated ? "Retry save" : "Retry connection"}</button>}{connection && !retired && <button className="text-button" onClick={downloadDraft}>Download local draft</button>}</div>}
+    {(backupStatus !== "idle" || backupError) && <div className="browser-backup-status"><p role="status">{backupStatus === "saved" ? "Browser backup saved — shared save is still pending." : backupStatus === "saving" ? "Backing up this draft in your browser…" : ""}</p><ErrorNotice message={backupError} />{backupError && connection && <button className="text-button" onClick={downloadDraft}>Download local draft</button>}</div>}
+    {file && ready && !accessDenied && <DraftRecovery drafts={drafts} branchId={file.mainBranchId} generation={file.generation} editable={!retired && status === "saved" && can(file.role, "edit")} onResume={draft => resumeDraft.current(draft)} onDiscard={async draft => { await removeLocalDraft(draft.id, draft.version); setDrafts(current => current.filter(record => record.id !== draft.id)); }} />}
     {lastCheckpoint && <div className="checkpoint-notice" role="status"><Check size={16} />Checkpoint {lastCheckpoint.number} saved: {lastCheckpoint.title}<Link href={`/files/${fileId}/history`}>View history</Link></div>}
     {connection && ready && file && user ? <RichTextEditor key={file.id} connection={connection} editable={can(file.role, "edit") && !accessDenied && !retired} user={user} onEditor={setEditor} wide={wide} onToggleWide={() => setWide(current => !current)} /> : <div className="editor-loading" role="status"><Wifi size={27} /><p>{error ? "The document could not be opened." : "Connecting to your shared document…"}</p></div>}
     <footer className="editor-footer"><span>Documents & history preview</span><span>Branching, chat, and calls are coming in later milestones.</span></footer>
