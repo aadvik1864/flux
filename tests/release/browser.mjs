@@ -9,6 +9,7 @@ await mkdir(diagnostics, { recursive: true, mode: 0o700 });
 const browser = await chromium.launch({ args: ["--no-proxy-server"] });
 const violations = [];
 const networkFailures = [];
+let mergeComparison;
 async function newContext() {
   const context = await browser.newContext({ ignoreHTTPSErrors: true, baseURL: origin });
   context.on("requestfailed", request => networkFailures.push({
@@ -29,6 +30,24 @@ async function request(page, path, body, method = "POST") {
     const response = await fetch(`/api${path}`, { method, headers: { "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     return { status: response.status, data: await response.json().catch(() => null) };
   }, { path, body, method });
+}
+async function caretAtEnd(block) {
+  // Target the actual paragraph, not a coordinate in the editor's empty space.
+  // This changes only the browser selection; all edits still use real input.
+  await block.evaluate(element => {
+    element.closest('[contenteditable="true"]').focus();
+    const range = document.createRange(); range.selectNodeContents(element); range.collapse(false);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+  });
+}
+async function authoredTexts(locator) {
+  // Caret widgets display collaborator names inside paragraphs but are not part
+  // of the authored document. Inspect a clone without changing the live editor.
+  return locator.evaluateAll(elements => elements.map(element => {
+    const copy = element.cloneNode(true);
+    copy.querySelectorAll(".collaboration-carets__caret").forEach(caret => caret.remove());
+    return copy.textContent;
+  }));
 }
 async function emailLink(recipient, expression) {
   let link;
@@ -97,12 +116,12 @@ try {
     await other.addCookies(await context.cookies());
     const tab = await other.newPage();
     await tab.goto(`/files/${file.data.id}`);
-    await expect(tab.getByRole("textbox", { name: "Document content" })).toBeVisible();
+    await expect.poll(() => authoredTexts(tab.getByRole("textbox", { name: "Document content" }))).toEqual(["Production container recovery baseline."]);
+    await expect(tab.locator(".save-status")).toHaveText("Saved");
     return { context: other, page: tab, marker: ` contributor-${index} ` };
   }));
   await Promise.all(collaborators.map(async client => {
-    await client.page.getByRole("textbox", { name: "Document content" }).click();
-    await client.page.keyboard.press("ControlOrMeta+End");
+    await caretAtEnd(client.page.locator(".document-content > p").last());
     await client.page.keyboard.insertText(client.marker);
   }));
   for (const client of collaborators) await expect(editor).toContainText(client.marker.trim());
@@ -182,16 +201,29 @@ try {
   await expect(reviewerPage).toHaveURL(origin + "/");
   assert.equal((await request(reviewerPage, `/invitations/${new URL(reviewerLink).pathname.split("/").at(-1)}/accept`, undefined)).status, 201);
   const baseline = (await request(page, `/files/${file.data.id}/checkpoints`, undefined, "GET")).data.checkpoints[0];
+  const baselineContext = await request(page, `/files/${file.data.id}/checkpoints/${baseline.id}`, undefined, "GET");
+  assert.equal(baselineContext.status, 200); assert.equal(baselineContext.data.content.content.length, 1);
+  const baselineBlock = baselineContext.data.content.content[0];
+  assert.equal(typeof baselineBlock.attrs.blockId, "string");
+  const baselineText = (await authoredTexts(editor))[0];
   const experiment = await request(page, `/files/${file.data.id}/branches`, { name: "Release experiment", checkpointId: baseline.id, requestId: crypto.randomUUID() });
   assert.equal(experiment.status, 201);
   const branchId = experiment.data.id, branchPath = `/files/${file.data.id}/branches/${branchId}`;
   const experimentPage = await context.newPage(); await experimentPage.goto(branchPath);
-  const experimentEditor = experimentPage.getByRole("textbox", { name: "Document content" }); await expect(experimentEditor).toBeVisible();
-  await experimentEditor.click(); await experimentPage.keyboard.press("ControlOrMeta+End"); await experimentPage.keyboard.press("Enter"); await experimentPage.keyboard.insertText("Approved experiment conclusion.");
+  const experimentEditor = experimentPage.getByRole("textbox", { name: "Document content" });
+  await expect.poll(() => authoredTexts(experimentEditor)).toEqual([baselineText]); await expect(experimentPage.locator(".save-status")).toHaveText("Saved");
+  const experimentBlocks = experimentEditor.locator(":scope > p");
+  await caretAtEnd(experimentBlocks.last()); await experimentPage.keyboard.press("Enter");
+  await expect.poll(() => authoredTexts(experimentBlocks)).toEqual([baselineText, ""]);
+  await experimentPage.keyboard.insertText("Approved experiment conclusion.");
+  await expect.poll(() => authoredTexts(experimentBlocks)).toEqual([baselineText, "Approved experiment conclusion."]);
   await expect(experimentPage.locator(".save-status")).toHaveText("Saved"); await expect(editor).not.toContainText("Approved experiment conclusion");
-  await editor.click(); await page.keyboard.press("ControlOrMeta+End"); await page.keyboard.insertText(" Main-only note preserved."); await expect(page.locator(".save-status")).toHaveText("Saved");
+  await caretAtEnd(editor.locator(":scope > p").last()); await page.keyboard.insertText(" Main-only note preserved.");
+  await expect.poll(() => authoredTexts(editor)).toEqual([`${baselineText} Main-only note preserved.`]); await expect(page.locator(".save-status")).toHaveText("Saved");
   const branchCheckpoint = await request(experimentPage, `/files/${file.data.id}/checkpoints`, { branchId, title: "Experiment decision context", requestId: crypto.randomUUID() }); assert.equal(branchCheckpoint.status, 201);
   const savedContext = await request(experimentPage, `/files/${file.data.id}/checkpoints/${branchCheckpoint.data.id}`, undefined, "GET"); assert.equal(savedContext.status, 200);
+  assert.equal(savedContext.data.content.content.length, 2); assert.deepEqual(savedContext.data.content.content[0], baselineBlock);
+  assert.notEqual(savedContext.data.content.content[1].attrs.blockId, baselineBlock.attrs.blockId);
   const sendBody = { body: "Keep the main note and add the conclusion.", requestId: crypto.randomUUID() };
   const discussion = await request(experimentPage, `${branchPath}/messages`, sendBody); assert.equal(discussion.status, 201);
   assert.equal((await request(experimentPage, `${branchPath}/messages`, sendBody)).data.id, discussion.data.id);
@@ -199,7 +231,8 @@ try {
     blockId: savedContext.data.content.content.at(-1).attrs.blockId, discussionMessageId: discussion.data.id, requestId: crypto.randomUUID() });
   assert.equal(bookmark.status, 201); assert.equal(bookmark.data.anchorAvailable, true);
   assert.equal((await request(experimentPage, `${branchPath}/decisions/${bookmark.data.id}`, { expectedStatus: "OPEN", status: "DECIDED" }, "PATCH")).status, 200);
-  const comparison = await request(reviewerPage, `${branchPath}/compare`, undefined, "GET"); assert.equal(comparison.status, 200); assert.deepEqual(comparison.data.conflicts, []);
+  const comparison = await request(reviewerPage, `${branchPath}/compare`, undefined, "GET");
+  mergeComparison = comparison; assert.equal(comparison.status, 200); assert.deepEqual(comparison.data.conflicts, []);
   assert.equal((await request(experimentPage, `${branchPath}/approvals`, { requestId: crypto.randomUUID(), mainHead: comparison.data.mainHead, sourceHead: comparison.data.sourceHead, resolutions: {} })).status, 403);
   await reviewerPage.goto(`${branchPath}/review`);
   await reviewerPage.getByRole("button", { name: "Approve reviewed result", exact: true }).click();
@@ -257,7 +290,14 @@ try {
   await recoveryContext.close();
   console.log("Production HTTPS/browser checks passed: identity/recovery, CSP/roles, eight-client convergence, durable saves, browser drafts, live reviewed merging, archived discussions, and linked Decision Bookmarks.");
 } catch (error) {
-  await writeFile(`${diagnostics}/browser.json`, JSON.stringify({ networkFailures, violations }, null, 2), { mode: 0o600 });
+  const pages = browser.contexts().flatMap(context => context.pages());
+  const editingDocuments = await Promise.allSettled(pages.map(async page => ({
+    path: new URL(page.url()).pathname.replace(/[A-Za-z0-9_-]{43}/g, "<token>"),
+    blocks: await page.locator(".document-content > *").evaluateAll(elements => elements.map(element => ({
+      type: element.tagName, blockId: element.getAttribute("data-block-id"), text: element.textContent,
+    }))),
+  })));
+  await writeFile(`${diagnostics}/browser.json`, JSON.stringify({ networkFailures, violations, editingDocuments, mergeComparison }, null, 2), { mode: 0o600 });
   await Promise.allSettled(browser.contexts().flatMap(context => context.pages()).map((page, index) => page.screenshot({ path: `${diagnostics}/failure-page-${index}.png`, fullPage: true })));
   console.error("Production browser failure diagnostics:", JSON.stringify({ networkFailures, violations }));
   throw error;

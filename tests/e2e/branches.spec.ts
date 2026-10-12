@@ -130,6 +130,34 @@ test("experiments isolate edits, require a teammate approval, and merge into con
   } finally { await owner.close(); await reviewer.close(); }
 });
 
+test("splitting a wrapped experiment paragraph keeps the base identity and merges its addition with a main-only edit", async ({ browser }) => {
+  const owner = await browser.newContext({ baseURL: origin });
+  try {
+    await account(owner, "Paragraph split owner");
+    const original = "Original introduction with enough words to wrap across several lines. ".repeat(4).trim();
+    const file = await fixture(owner, { type: "doc", content: [paragraph("intro", original)] });
+    const branch = await fork(owner, file.id, file.base.id);
+    const main = await owner.newPage(), source = await owner.newPage();
+    await source.setViewportSize({ width: 390, height: 844 });
+    await open(main, file.id); await open(source, file.id, branch.id);
+    const editor = source.getByRole("textbox", { name: "Document content" }), blocks = editor.locator(":scope > p");
+    await expect(blocks).toHaveText([original]);
+    await editor.click(); await source.keyboard.press("ControlOrMeta+End"); await source.keyboard.press("Enter");
+    await expect(blocks).toHaveText([original, ""]);
+    await expect(blocks.first()).toHaveAttribute("data-block-id", "intro");
+    await source.keyboard.insertText("A separately added experiment conclusion.");
+    await expect(blocks).toHaveText([original, "A separately added experiment conclusion."]);
+    const addedId = await blocks.last().getAttribute("data-block-id");
+    expect(addedId).toBeTruthy(); expect(addedId).not.toBe("intro");
+    await expect(source.locator(".save-status")).toHaveText("Saved");
+    await change(main, "intro", `${original} Main-only note.`);
+    const preview = await compare(owner, file.id, branch.id);
+    expect(preview.experiment.content).toEqual([paragraph("intro", original), paragraph(addedId!, "A separately added experiment conclusion.")]);
+    expect(preview.conflicts).toEqual([]); expect(preview.orderConflict).toBe(false);
+    expect(preview.result?.content).toEqual([paragraph("intro", `${original} Main-only note.`), paragraph(addedId!, "A separately added experiment conclusion.")]);
+  } finally { await owner.close(); }
+});
+
 test("stale review heads, newer edits, revoked reviewers, and concurrent finalizations are fenced", async ({ browser }) => {
   const owner = await browser.newContext({ baseURL: origin }), reviewer = await browser.newContext({ baseURL: origin });
   try {

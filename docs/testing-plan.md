@@ -2,7 +2,7 @@
 
 ## Automated now
 
-Current verification (2026-10-12): 93 unit tests, 42 Chromium acceptance tests, and 41 Firefox
+Current verification (2026-10-12): 93 unit tests, 43 Chromium acceptance tests, and 42 Firefox
 acceptance tests pass (one unsupported Firefox touch-emulation test is skipped), along
 with type checks and the production build. Dependency audit reports no known
 vulnerabilities. The expanded frozen-source Docker/HTTPS/SMTP/backup/restore
@@ -51,6 +51,9 @@ Experiment browser tests cover isolated main/source edits, UI approval/confirmat
 exact stored-result preview despite later UI choices, connected-main publication,
 stale heads, superseded and offboarded reviewers, concurrent finalization, retry
 identity, corrupt base/result refusal, and download-only archived offline drafts.
+Native keyboard paragraph splitting is checked on a narrow, wrapped experiment:
+the existing block keeps its ID and exact content, the new paragraph receives a
+different ID, and its addition combines with a main-only edit without a conflict.
 Discussion tests cover two independent accounts, reopen/status persistence,
 read-only highlighted checkpoint context, mobile/night/reduced-motion layout,
 lost send responses, concurrent retry/sends/moderation, message/bookmark pagination,
@@ -162,9 +165,37 @@ redacted HTTPS alert, missing-confirmation refusal, explicit resend and audit,
 The release browser runs in a pinned Playwright container on the test network to
 isolate it from host network changes; update its image/version/digest alongside
 `@playwright/test`. Failed runs preserve network errors, screenshots, service logs,
-and container health/exit state before cleanup. Only disposable-fixture diagnostics,
+container health/exit state, visible block IDs/text, and the captured merge
+comparison before cleanup. Only disposable-fixture diagnostics,
 not environment files or database archives, are uploaded by CI. TLS certificates
 and SMTP delivery are local test fixtures, not public-domain or real-inbox validation.
+
+Remote run `38302974522` passed unit/browser/type/build/audit checks but rejected
+the release merge fixture with an `EDIT_EDIT` conflict. Captured screenshots showed
+the experiment conclusion inside the original paragraph rather than a separate
+addition. The release fixture now explicitly places the native browser selection
+at the intended paragraph end, waits for the saved baseline, asserts the split
+before typing, and verifies exact unchanged baseline content in the source
+checkpoint. Conflict rules and the empty-conflict assertion remain unchanged;
+mutations are not retried to hide an incorrect edit.
+Exact browser text checks strip only decorative collaboration-caret widgets from
+a detached DOM clone; teammate names are not authored paragraph content. The live
+editor and checkpoint payloads are not modified by these assertions.
+The targeted branch suite then passed all 10 checks (five Chromium and five
+Firefox) on 2026-10-12; type checks, all 93 units, and the zero-vulnerability
+dependency audit also passed. Browser checks run after package builds finish:
+building shared packages while reusing the development server can restart its
+API watcher mid-request, which caused one diagnosed local signup refusal before
+the stable full targeted run. Evidence:
+`/tmp/opencode/flux-ci-fixture-branches-stable.log`.
+The revised complete Docker release exercise passed on 2026-10-12, including
+eight-client convergence, exact baseline preservation, reviewed merging,
+archived discussion/decision context, singleton fencing, encrypted restoration,
+and populated-target refusal. Evidence: `/tmp/opencode/flux-release-841mh729/`
+and `/tmp/opencode/flux-ci-fixture-release-final.log`.
+The complete local browser suite also passed: 85 checks (43 Chromium and 42
+Firefox), with the same unsupported Firefox touch-emulation skip. Evidence:
+`/tmp/opencode/flux-ci-fixture-all-browsers.log`.
 
 ## Optional integration fixture
 
