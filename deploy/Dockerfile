@@ -1,5 +1,5 @@
 # Pinned Node 22 / Alpine and PostgreSQL images. Update digests deliberately in CI.
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS build
+FROM node:26-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a AS build
 RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -24,7 +24,7 @@ CMD ["node", "dist/operations.js", "maintenance"]
 FROM build AS production-dependencies
 RUN npm prune --omit=dev
 
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS service
+FROM node:26-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a AS service
 RUN apk add --no-cache openssl
 ENV NODE_ENV=production
 WORKDIR /app
@@ -45,7 +45,7 @@ FROM service AS collaboration
 WORKDIR /app/apps/collaboration
 CMD ["node", "dist/server.js"]
 
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS web
+FROM node:26-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a AS web
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000 NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./
