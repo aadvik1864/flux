@@ -13,7 +13,7 @@ import { ThemeToggle } from "./theme";
 import { CheckpointArtwork, DocumentArtwork, HistoryArtwork } from "./work-art";
 
 function kindLabel(checkpoint: CheckpointSummary): string {
-  return checkpoint.kind === "RESTORE" ? "Restored revision" : checkpoint.kind === "BEFORE_RESTORE" ? "Preserved before restore" : "Named checkpoint";
+  return checkpoint.kind === "RESTORE" ? "Restored revision" : checkpoint.kind === "BEFORE_RESTORE" ? "Preserved before restore" : checkpoint.kind === "MERGE" ? "Reviewed merge" : checkpoint.kind === "BEFORE_MERGE" ? "Preserved before merge" : checkpoint.kind === "MERGED_EXPERIMENT" ? "Archived experiment" : "Named checkpoint";
 }
 
 export function HistoryPage({ fileId }: { fileId: string }) {

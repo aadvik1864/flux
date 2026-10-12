@@ -23,7 +23,7 @@ import { DraftRecovery } from "./draft-recovery";
 type SaveStatus = "connecting" | "syncing" | "saved" | "offline" | "error";
 type Connection = { document: Y.Doc; provider: HocuspocusProvider };
 
-export function DocumentPage({ fileId }: { fileId: string }) {
+export function DocumentPage({ fileId, branchId }: { fileId: string; branchId?: string }) {
   const [file, setFile] = useState<FileDetail | null>(null);
   const [connection, setConnection] = useState<Connection | null>(null);
   const [ready, setReady] = useState(false);
@@ -94,7 +94,7 @@ export function DocumentPage({ fileId }: { fileId: string }) {
       restored = true; online = false; clearTimeout(timer); clearTimeout(retryTimer); provider?.configuration.websocketProvider.disconnect();
       if (dirty.current) {
         setRetired(true); setStatus("offline");
-        setError("Main was restored while this draft had unacknowledged changes. Your local text is still visible below. Download a copy before opening the current revision.");
+        setError(`${branchId ? "The experiment was merged or its editing session changed" : "Main was restored"} while this draft had unacknowledged changes. Your local text is still visible below. Download a copy before opening the current revision.`);
       } else setConnectionVersion(value => value + 1);
     }
 
@@ -139,24 +139,26 @@ export function DocumentPage({ fileId }: { fileId: string }) {
       if (!active || connecting || provider) return;
       connecting = true;
       try {
-        const detail = await api<FileDetail>(`/files/${fileId}`, { signal: AbortSignal.any([cancelled.signal, AbortSignal.timeout(10_000)]) });
+        const query = branchId ? `?branchId=${encodeURIComponent(branchId)}` : "";
+        const detail = await api<FileDetail>(`/files/${fileId}${query}`, { signal: AbortSignal.any([cancelled.signal, AbortSignal.timeout(10_000)]) });
         if (!active) return;
         setFile(detail);
         try { const stored = await readLocalDrafts(account.id, fileId); if (active) setDrafts(stored); }
         catch { if (active) { setBackupStatus("error"); setBackupError("Browser backups are unavailable. Keep the editor open until Saved, or download a copy before leaving."); } }
         if (!active) return;
         document = new Y.Doc();
-        if (can(detail.role, "edit")) writer = new LocalDraftWriter({ id: crypto.randomUUID(), userId: account.id, fileId, branchId: detail.mainBranchId, fileName: detail.name, generation: detail.generation });
+        const editingBranchId = detail.editingBranchId ?? detail.mainBranchId;
+        if (can(detail.role, "edit") && !detail.branchArchived) writer = new LocalDraftWriter({ id: crypto.randomUUID(), userId: account.id, fileId, branchId: editingBranchId, fileName: detail.name, generation: detail.generation });
         provider = new HocuspocusProvider({
           url: process.env.NEXT_PUBLIC_COLLABORATION_URL ?? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/sync`,
-          name: branchRoom(detail.mainBranchId, detail.generation),
+          name: branchRoom(editingBranchId, detail.generation),
           document,
           token: async () => {
             tokenFailure = null;
             try {
-              const credential = await api<{ token: string; room: string }>(`/files/${fileId}/collaboration-token`, { method: "POST", signal: AbortSignal.any([cancelled.signal, AbortSignal.timeout(10_000)]) });
+              const credential = await api<{ token: string; room: string }>(`/files/${fileId}/collaboration-token${query}`, { method: "POST", signal: AbortSignal.any([cancelled.signal, AbortSignal.timeout(10_000)]) });
               if (!active) throw new Error("Connection closed");
-              if (credential.room !== branchRoom(detail.mainBranchId, detail.generation)) { handleRestore(); throw new Error("Editing session changed"); }
+              if (credential.room !== branchRoom(editingBranchId, detail.generation)) { handleRestore(); throw new Error("Editing session changed"); }
               return credential.token;
             }
             catch (error) {
@@ -223,7 +225,7 @@ export function DocumentPage({ fileId }: { fileId: string }) {
           scheduleSave();
         });
         resumeDraft.current = async draft => {
-          if (!active || !document || !online || blocked || restored || !can(detail.role, "edit") || draft.userId !== account.id || draft.fileId !== fileId || draft.branchId !== detail.mainBranchId || draft.generation !== detail.generation) throw new Error("This draft cannot be resumed into this editing session");
+          if (!active || !document || !online || blocked || restored || detail.branchArchived || !can(detail.role, "edit") || draft.userId !== account.id || draft.fileId !== fileId || draft.branchId !== editingBranchId || draft.generation !== detail.generation) throw new Error("This draft cannot be resumed into this editing session");
           resumed.push(draft);
           Y.applyUpdate(document, draft.state, "browser-draft-recovery");
           // Even an already-present update requires a durable acknowledgement.
@@ -251,7 +253,7 @@ export function DocumentPage({ fileId }: { fileId: string }) {
       window.removeEventListener("online", onlineAgain); window.removeEventListener("offline", offlineNow); window.removeEventListener("pagehide", persistDraft);
       provider?.destroy(); document?.destroy();
     };
-  }, [fileId, user, connectionVersion]);
+  }, [fileId, branchId, user, connectionVersion]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (dirty.current) { event.preventDefault(); event.returnValue = ""; } };
@@ -265,7 +267,7 @@ export function DocumentPage({ fileId }: { fileId: string }) {
     setCheckpointBusy(true); setCheckpointError("");
     try {
       const checkpoint = await api<CheckpointSummary>(`/files/${fileId}/checkpoints`, {
-        method: "POST", body: JSON.stringify({ title, requestId: checkpointRequestId.current }),
+        method: "POST", body: JSON.stringify({ title, requestId: checkpointRequestId.current, ...(branchId ? { branchId } : {}) }),
       });
       setLastCheckpoint(checkpoint); setCheckpointOpen(false);
     } catch (error) { setCheckpointError(errorMessage(error)); }
@@ -282,14 +284,25 @@ export function DocumentPage({ fileId }: { fileId: string }) {
   const statusLabel = { connecting: "Connecting", syncing: "Saving…", saved: "Saved", offline: "Offline — keep this page open", error: "Not saved / access unavailable" }[status];
   return <main className={`editor-shell ${wide ? "wide-editor" : ""}`}>
     <header className="editor-topbar"><div className="editor-heading"><Link href={file ? `/workspaces/${file.workspaceId}` : "/"} className="icon-button" aria-label="Back to workspace" onClick={event => { if (dirty.current && !window.confirm("Some changes are not saved yet. Leave this document?")) event.preventDefault(); }}><ArrowLeft size={20} /></Link><Link href="/" className="editor-brand"><FluxMark /></Link><span className="header-divider" /><div className="editor-document-identity" data-tone="orchid"><DocumentArtwork /><div><span className="document-workspace">{file?.workspaceName ?? "Workspace"}</span><h1>{file?.name ?? "Opening document…"}</h1></div></div></div><div className="editor-header-tools"><div className="editor-collaborators" aria-label="Active collaborators">{people.map(person => <Avatar user={person} key={person.id} size="small" />)}<span>{people.length ? `${people.length} here` : "Connecting"}</span></div><ThemeToggle /></div></header>
-    <div className="document-subbar"><span className="branch-label"><GitBranch size={15} />main</span><span className="document-mode">{file && !can(file.role, "edit") ? "Read-only" : "Shared document"}</span><div className="document-history-actions">{file && can(file.role, "edit") && <button className="history-action artwork-trigger" disabled={!ready || status !== "saved" || retired || accessDenied} onClick={() => { checkpointRequestId.current = crypto.randomUUID(); setCheckpointError(""); setCheckpointOpen(true); }}><span className="action-artwork"><CheckpointArtwork /></span>Save checkpoint</button>}<Link href={`/files/${fileId}/history`} className="history-action artwork-trigger" onClick={event => { if (dirty.current && !window.confirm("Some changes are not saved. Keep editing until Saved, or leave this draft?")) event.preventDefault(); }}><span className="action-artwork"><HistoryArtwork /></span>History</Link></div><span className={`save-status ${status}`} role="status">{status === "saved" ? <Check size={15} /> : status === "offline" ? <WifiOff size={15} /> : status === "error" ? <AlertCircle size={15} /> : <LoaderCircle size={15} className="spin" />}{statusLabel}</span></div>
+    <div className="document-subbar">
+      <span className="branch-label" title={file?.branchName ?? "main"}><GitBranch size={15} /><span>{file?.branchName ?? "main"}</span></span>
+      <span className="document-mode">{file?.branchArchived ? "Merged · read-only" : file && !can(file.role, "edit") ? "Read-only" : "Shared document"}</span>
+      <div className="document-history-actions">
+        {file && !file.branchArchived && !retired && can(file.role, "edit") && <button className="history-action artwork-trigger" disabled={!ready || status !== "saved" || accessDenied} onClick={() => { checkpointRequestId.current = crypto.randomUUID(); setCheckpointError(""); setCheckpointOpen(true); }}><span className="action-artwork"><CheckpointArtwork /></span>Save checkpoint</button>}
+        <Link href={`/files/${fileId}/branches`} className="history-action artwork-trigger" onClick={event => { if (dirty.current && !window.confirm("Some changes are not saved. Leave this draft to open experiments?")) event.preventDefault(); }}><GitBranch size={15} />Experiments</Link>
+        {branchId && !file?.branchArchived && !retired && <Link href={`/files/${fileId}/branches/${branchId}/review`} className="history-action artwork-trigger" onClick={event => { if (dirty.current && !window.confirm("Some changes are not saved. Leave this draft to compare the saved experiment?")) event.preventDefault(); }}>Review merge</Link>}
+        <Link href={`/files/${fileId}/discuss${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ""}`} className="history-action artwork-trigger" onClick={event => { if (dirty.current && !window.confirm("Some changes are not saved. Leave this draft to open discussion?")) event.preventDefault(); }}>Discussion & decisions</Link>
+        <Link href={`/files/${fileId}/history`} className="history-action artwork-trigger" onClick={event => { if (dirty.current && !window.confirm("Some changes are not saved. Keep editing until Saved, or leave this draft?")) event.preventDefault(); }}><span className="action-artwork"><HistoryArtwork /></span>{branchId ? "Main history" : "History"}</Link>
+      </div>
+      <span className={`save-status ${status}`} role="status">{status === "saved" ? <Check size={15} /> : status === "offline" ? <WifiOff size={15} /> : status === "error" ? <AlertCircle size={15} /> : <LoaderCircle size={15} className="spin" />}{statusLabel}</span>
+    </div>
     {error && <div className="editor-error"><ErrorNotice message={error} />{retired ? <div className="draft-recovery-actions"><button className="button secondary" onClick={downloadDraft}><Download size={16} />Download local draft</button><button className="button primary" onClick={() => { if (!dirty.current || window.confirm("Open the restored revision? Download a copy first if you want to keep this local draft.")) setConnectionVersion(value => value + 1); }}>Open current revision</button></div> : !accessDenied && <button className="button secondary" onClick={() => { if (connection?.provider.isAuthenticated) { setStatus("syncing"); retrySave.current(); } else retryConnection.current(); }}>{connection?.provider.isAuthenticated ? "Retry save" : "Retry connection"}</button>}{connection && !retired && <button className="text-button" onClick={downloadDraft}>Download local draft</button>}</div>}
     {(backupStatus !== "idle" || backupError) && <div className="browser-backup-status"><p role="status">{backupStatus === "saved" ? "Browser backup saved — shared save is still pending." : backupStatus === "saving" ? "Backing up this draft in your browser…" : ""}</p><ErrorNotice message={backupError} />{backupError && connection && <button className="text-button" onClick={downloadDraft}>Download local draft</button>}</div>}
-    {file && ready && !accessDenied && <DraftRecovery drafts={drafts} branchId={file.mainBranchId} generation={file.generation} editable={!retired && status === "saved" && can(file.role, "edit")} onResume={draft => resumeDraft.current(draft)} onDiscard={async draft => { await removeLocalDraft(draft.id, draft.version); setDrafts(current => current.filter(record => record.id !== draft.id)); }} />}
+    {file && ready && !accessDenied && <DraftRecovery drafts={drafts} branchId={file.editingBranchId ?? file.mainBranchId} generation={file.generation} editable={!retired && !file.branchArchived && status === "saved" && can(file.role, "edit")} onResume={draft => resumeDraft.current(draft)} onDiscard={async draft => { await removeLocalDraft(draft.id, draft.version); setDrafts(current => current.filter(record => record.id !== draft.id)); }} />}
     {lastCheckpoint && <div className="checkpoint-notice" role="status"><Check size={16} />Checkpoint {lastCheckpoint.number} saved: {lastCheckpoint.title}<Link href={`/files/${fileId}/history`}>View history</Link></div>}
-    {connection && ready && file && user ? <RichTextEditor key={file.id} connection={connection} editable={can(file.role, "edit") && !accessDenied && !retired} user={user} onEditor={setEditor} wide={wide} onToggleWide={() => setWide(current => !current)} /> : <div className="editor-loading" role="status"><Wifi size={27} /><p>{error ? "The document could not be opened." : "Connecting to your shared document…"}</p></div>}
-    <footer className="editor-footer"><span>Documents & history preview</span><span>Branching, chat, and calls are coming in later milestones.</span></footer>
-    {checkpointOpen && <Modal title="Save a checkpoint" artwork={<CheckpointArtwork />} onClose={() => { if (!checkpointBusy) setCheckpointOpen(false); }}><form className="stack-form" onSubmit={saveCheckpoint}><p className="muted">Save an immutable version of main, including changes accepted from your collaborators.</p><label>Checkpoint name<input name="title" maxLength={120} placeholder="e.g. Initial submission draft" required /></label><ErrorNotice message={checkpointError} /><div className="form-actions"><button type="button" className="button secondary" disabled={checkpointBusy} onClick={() => setCheckpointOpen(false)}>Cancel</button><button className="button primary" disabled={checkpointBusy || status !== "saved"}>{checkpointBusy ? "Saving checkpoint…" : "Save checkpoint"}</button></div></form></Modal>}
+    {connection && ready && file && user ? <RichTextEditor key={file.id} connection={connection} editable={can(file.role, "edit") && !file.branchArchived && !accessDenied && !retired} user={user} onEditor={setEditor} wide={wide} onToggleWide={() => setWide(current => !current)} /> : <div className="editor-loading" role="status"><Wifi size={27} /><p>{error ? "The document could not be opened." : "Connecting to your shared document…"}</p></div>}
+    <footer className="editor-footer"><span>Documents, history & experiments</span><span>Experiment changes reach main through a reviewed merge.</span></footer>
+    {checkpointOpen && <Modal title="Save a checkpoint" artwork={<CheckpointArtwork />} onClose={() => { if (!checkpointBusy) setCheckpointOpen(false); }}><form className="stack-form" onSubmit={saveCheckpoint}><p className="muted">Save an immutable version of {file?.branchName ?? "main"}, including changes accepted from your collaborators.</p><label>Checkpoint name<input name="title" maxLength={120} placeholder="e.g. Initial submission draft" required /></label><ErrorNotice message={checkpointError} /><div className="form-actions"><button type="button" className="button secondary" disabled={checkpointBusy} onClick={() => setCheckpointOpen(false)}>Cancel</button><button className="button primary" disabled={checkpointBusy || status !== "saved"}>{checkpointBusy ? "Saving checkpoint…" : "Save checkpoint"}</button></div></form></Modal>}
   </main>;
 }
 

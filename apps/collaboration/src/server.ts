@@ -8,9 +8,10 @@ import * as Y from "yjs";
 import { z } from "zod";
 import pg from "pg";
 import { branchRoom, parseBranchRoom, can, colorForUser } from "@flux/shared";
-import { SnapshotStorage } from "@flux/storage";
+import { digest, SnapshotStorage } from "@flux/storage";
 import { RoomGate } from "./room-gate.js";
 import { HistoryCoordinator, HistoryError, historyCommandSchema, type RoomState } from "./history.js";
+import { BranchCoordinator, branchCommandSchema } from "./branches.js";
 
 config({ path: resolve(process.cwd(), "../../.env"), quiet: true });
 
@@ -49,7 +50,7 @@ async function authorize(context: ConnectionContext) {
   const [session, member, branch] = await Promise.all([
     db.session.findUnique({ where: { id: context.sessionId }, include: { user: { select: { emailVerifiedAt: true } } } }),
     db.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: context.workspaceId, userId: context.userId } } }),
-    db.branch.findUnique({ where: { id: context.branchId }, select: { generation: true } }),
+    db.branch.findUnique({ where: { id: context.branchId }, select: { generation: true, archivedAt: true } }),
   ]);
   if (!session || session.userId !== context.userId || session.expiresAt <= new Date() || !member || (env.REQUIRE_EMAIL_VERIFICATION === "true" && !session.user.emailVerifiedAt)) {
     throw { code: 4403, reason: "Workspace access was revoked or your session expired" };
@@ -57,7 +58,7 @@ async function authorize(context: ConnectionContext) {
   if (!branch || branch.generation !== context.generation) {
     throw { code: 4409, reason: "Main was restored. Open the current revision" };
   }
-  return member;
+  return { ...member, archived: Boolean(branch.archivedAt) };
 }
 
 // All writes for a room are serialized. This first slice supports ONE sync server.
@@ -90,6 +91,7 @@ async function persist(documentName: string, document: Document): Promise<void> 
 }
 
 const history = new HistoryCoordinator(db, storage, rooms, gate, persist);
+const branches = new BranchCoordinator(db, storage, rooms, gate, persist);
 
 const server = new Server<ConnectionContext>({
   name: "flux-collaboration",
@@ -120,7 +122,7 @@ const server = new Server<ConnectionContext>({
       response.end(JSON.stringify({ service: "flux-collaboration", status: ok ? "ok" : "unavailable" }));
       throw null;
     }
-    if (request.url?.split("?")[0] !== "/internal/history") return;
+    if (path !== "/internal/history" && path !== "/internal/branches") return;
     response.setHeader("Content-Type", "application/json");
     response.setHeader("Cache-Control", "no-store");
     try {
@@ -130,11 +132,26 @@ const server = new Server<ConnectionContext>({
       let verified: unknown;
       try {
         verified = jwt.verify(authorization.slice(7), env.COLLABORATION_SECRET, {
-          algorithms: ["HS256"], issuer: "flux-api", audience: "flux-history",
+          algorithms: ["HS256"], issuer: "flux-api", audience: path === "/internal/branches" ? "flux-branches" : "flux-history",
         });
       } catch { throw new HistoryError(401, "Invalid service credential"); }
-      const credential = z.object({ sub: z.string(), sessionId: z.string(), command: historyCommandSchema }).parse(verified);
-      const result = await history.execute(instance, credential.command, credential.sub, credential.sessionId);
+      const result = path === "/internal/branches" ? await (async () => {
+        const credential = z.object({ sub: z.string(), sessionId: z.string(), commandHash: z.string().regex(/^[a-f0-9]{64}$/) }).parse(verified);
+        const chunks: Buffer[] = []; let length = 0;
+        for await (const chunk of request) {
+          length += chunk.length;
+          if (length > 256 * 1024) throw new HistoryError(413, "Branch command is too large");
+          chunks.push(Buffer.from(chunk));
+        }
+        const body = Buffer.concat(chunks);
+        if (digest(body) !== credential.commandHash) throw new HistoryError(401, "Invalid branch command signature");
+        let parsed: unknown;
+        try { parsed = JSON.parse(body.toString("utf8")); } catch { throw new HistoryError(400, "Invalid branch command"); }
+        return branches.execute(instance, branchCommandSchema.parse(parsed), credential.sub, credential.sessionId);
+      })() : await (async () => {
+        const credential = z.object({ sub: z.string(), sessionId: z.string(), command: historyCommandSchema }).parse(verified);
+        return history.execute(instance, credential.command, credential.sub, credential.sessionId);
+      })();
       response.writeHead(200); response.end(JSON.stringify(result));
     } catch (error) {
       const status = error instanceof HistoryError ? error.status : error instanceof z.ZodError ? 400 : 503;
@@ -166,7 +183,7 @@ const server = new Server<ConnectionContext>({
       name: user.name, color: colorForUser(user.id),
     };
     const member = await authorize(context);
-    connectionConfig.readOnly = !can(member.role, "edit");
+    connectionConfig.readOnly = !can(member.role, "edit") || member.archived;
     return context;
   },
 
@@ -180,7 +197,7 @@ const server = new Server<ConnectionContext>({
     const release = await gate.acquire(documentName);
     try {
       const member = await authorize(context);
-      connection.readOnly = !can(member.role, "edit");
+      connection.readOnly = !can(member.role, "edit") || member.archived;
       messageLocks.set(connection, release);
     } catch (error) { release(); throw error; }
   },
@@ -249,7 +266,7 @@ const revocationTimer = setInterval(async () => {
       for (const connection of document.getConnections()) {
         try {
           const member = await authorize(connection.context);
-          connection.readOnly = !can(member.role, "edit");
+          connection.readOnly = !can(member.role, "edit") || member.archived;
         } catch (error) {
           const close = error as { code?: number; reason?: string };
           connection.close({ code: close.code ?? 4403, reason: close.reason ?? "Workspace access was revoked or your session expired" });

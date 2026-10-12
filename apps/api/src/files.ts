@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Module, NotFoundException, Param, Post, Req, UseGuards, ForbiddenException } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Module, NotFoundException, Param, Post, Query, Req, UseGuards, ForbiddenException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
@@ -29,30 +29,33 @@ class FilesController {
   }
 
   @Get("files/:id")
-  async detail(@Param("id") id: string, @Req() request: AuthenticatedRequest): Promise<FileDetail> {
+  async detail(@Param("id") id: string, @Req() request: AuthenticatedRequest, @Query() query?: unknown): Promise<FileDetail> {
     const file = await this.db.file.findUnique({ where: { id }, include: { workspace: true, mainBranch: true } });
     if (!file || !file.mainBranchId) throw new NotFoundException("Document not found");
     const role = await this.access.workspace(file.workspaceId, request.identity.user.id);
+    const data = input(z.object({ branchId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/).optional() }), query ?? {});
+    const branch = data.branchId ? await this.db.branch.findFirst({ where: { id: data.branchId, fileId: id } }) : file.mainBranch;
+    if (!branch) throw new NotFoundException("Editing branch not found");
     return {
       id, name: file.name, mainBranchId: file.mainBranchId, updatedAt: file.updatedAt.toISOString(),
       workspaceId: file.workspaceId, workspaceName: file.workspace.name, role,
-      generation: file.mainBranch!.generation,
+      generation: branch.generation, editingBranchId: branch.id, branchName: branch.name, branchArchived: Boolean(branch.archivedAt),
     };
   }
 
   @Post("files/:id/collaboration-token")
-  async token(@Param("id") id: string, @Req() request: AuthenticatedRequest) {
-    const file = await this.detail(id, request);
+  async token(@Param("id") id: string, @Req() request: AuthenticatedRequest, @Query() query?: unknown) {
+    const file = await this.detail(id, request, query);
     const user = request.identity.user;
     const token = jwt.sign({
-      room: branchRoom(file.mainBranchId, file.generation),
+      room: branchRoom(file.editingBranchId!, file.generation),
       sessionId: request.identity.sessionId,
       name: user.name,
       color: colorForUser(user.id),
     }, env.COLLABORATION_SECRET, {
       subject: user.id, issuer: "flux-api", audience: "flux-collaboration", expiresIn: "2m", algorithm: "HS256",
     });
-    return { token, room: branchRoom(file.mainBranchId, file.generation) };
+    return { token, room: branchRoom(file.editingBranchId!, file.generation) };
   }
 }
 

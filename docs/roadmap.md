@@ -12,7 +12,10 @@ correctness and acceptance criteria rather than calendar dates.
 - [x] Server-side read-only checks and session/membership revocation.
 - [x] Unit tests, browser acceptance tests, production build.
 - [x] Three-browser co-editing, reconnection, and acknowledged-state recovery after an abrupt service restart.
-- [ ] Validate LiveKit and Office integrations in separate feasibility prototypes.
+- [x] Isolated self-hosted LiveKit feasibility: two-client media/screen capture,
+  invalid signatures, and retirement of an old room with an unexpired token.
+- [ ] Approve a genuinely free/self-hosted Office option and validate co-editing,
+  permission boundaries, persistence, callbacks, and import/export.
 
 ## Completed: checkpoints and history
 
@@ -25,32 +28,47 @@ correctness and acceptance criteria rather than calendar dates.
 - [x] Automated history acceptance, integrity/schema checks, and offline draft recovery.
 
 Exit gate passed: earlier states can be revisited without changing current content.
-Current verification: 75 unit tests, 32 Chromium and 31 Firefox acceptance tests
-(one unsupported Firefox touch test skipped), type checks, production builds,
-dependency audit, and the isolated Docker/HTTPS/SMTP/restore exercise. This is not
-completed V1 or production-readiness certification; operator launch gates remain.
+The earlier recovery release passed 75 units, 32 Chromium and 31 Firefox checks
+and the isolated Docker/HTTPS/SMTP/restore exercise. New milestones require their
+own regression/release record in `testing-plan.md`; earlier results do not validate
+later changes. This is not completed V1 or production-readiness certification.
 
-## Next: branch review and safe merging
+## Implemented: branch review and safe merging
 
-- Create experiments from main checkpoints in isolated rooms.
-- Define limited block-level three-way comparison.
-- Require manual resolution for ambiguous/unsupported structures.
-- Pin reviewed versions, save resolutions, and record non-author approval.
-- Coordinate merge finalization with the live collaboration server.
-- Archive merged experiments and append resulting checkpoints/events.
+- [x] Create experiments from main checkpoints in isolated rooms.
+- [x] Limited, conservative stable-block three-way comparison.
+- [x] Manual conflict/structure/order decisions.
+- [x] Exact reviewed heads/result and non-author approval; offboarding supersession.
+- [x] Head-validated incremental merge into connected main.
+- [x] Preserved main/source/result checkpoints, archival, audit, and retry identity.
 
 Exit gate: independent changes combine; conflicts and stale reviews cannot
 silently overwrite content.
 
-## Finish distinctive MVP
+## Implemented: distinctive document MVP
 
-Add persistent chat, review discussions, and manually created Decision Bookmarks.
-Demonstrate the complete collaborate → experiment → review → merge workflow.
+- [x] Persistent branch-scoped text discussion with quotas, pagination, retry IDs,
+  moderation, and viewer/archived read-only boundaries.
+- [x] Manually created Decision Bookmarks with explanation/status, checkpoint,
+  exact block identity, and optional linked discussion.
+- [x] Deleted/recreated or restored anchors stay unavailable; original context
+  remains read-only and never silently reattaches to another block.
+- [x] UI workflow: collaborate → experiment → discuss → review → approve → merge.
+
+Final acceptance is recorded separately in `testing-plan.md`. The document MVP
+does not include live launch, integrated calls, or the whole planned V1.
+Current local unit/browser record: 93 units, 42 Chromium and 41 Firefox checks,
+with one unsupported Firefox touch-emulation test skipped; type/build/audit pass.
+The expanded frozen-source Docker/HTTPS/SMTP/merge/discussion/decision and
+encrypted-restore exercise also passes, including approval invalidation on restore.
 
 ## Expand to Full V1
 
-Add LiveKit calls/screen sharing and Live Merge Rooms. Select a licensed Office
-integration only after the evaluation in `office-evaluation.md`. Integrate
+Integrate optional LiveKit calls/screen sharing with application authorization,
+revocation, and operational/device acceptance; then add Live Merge Rooms. The
+passing isolated prototype is not that integration. Select an Office option
+only after `office-evaluation.md` and `integration-feasibility.md` clear the
+self-hosted/free and licensing constraints. Integrate
 spreadsheets/presentations and file-level snapshots; document format limitations.
 
 ## Release hardening
@@ -70,6 +88,6 @@ spreadsheets/presentations and file-level snapshots; document format limitations
 - [ ] Independent security review before expansion beyond trusted invited teams.
 
 The executable local release checks and launch checklist are in `docs/production.md`.
-Production hardening does not implement the remaining product milestones.
+Production hardening does not replace the remaining product/launch gates.
 
 Fine-grained replay, advanced Office merging, and cross-file consistency stay later.

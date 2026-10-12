@@ -111,15 +111,61 @@ Application immutability is not object-lock compliance. Storage administrators
 retain power to mutate objects. Failed metadata commits can leave orphan uploads;
 reconciliation and lifecycle policies remain to be implemented.
 
-## Future merge protocol
+## Experiments and reviewed merging
 
-Approval must fingerprint base/source/target revisions and the resolved result.
-Finalization needs a server-enforced authoritative barrier covering WebSocket
-writes as well as database updates. A brief pause can be used initially.
-Apply approved changes through the live document transaction, save a checkpoint,
-and publish events only after successful commit. Revalidate both branch heads.
-Semantic merge application is still unimplemented; restore's generation change
-must not be mistaken for a completed three-way merge algorithm.
+Experiments clone validated main-checkpoint content into separate CRDT identities
+and rooms. Their immutable base reference remains protected. The API signs a
+separate `flux-branches` service credential bound to the command-body hash;
+large resolution maps travel in a bounded body, not an oversized JWT header.
+
+The coordinator serializes branch actions and acquires the workspace barrier and
+both room barriers in deterministic order. Comparison is conservative at the
+top-level stable-block boundary: preserve main-only changes; propose independent
+simple experiment changes; require explicit edit/edit, edit/delete, structural,
+and ambiguous-order decisions. No arbitrary sorting silently chooses an order.
+
+Non-author approval fingerprints base checksum, both generation/revision/content
+heads, and normalized resolved result. Finalization rechecks both live heads,
+current reviewer access, and an unsuperseded approval, including inside the
+workspace-row-locked commit. Offboarding invalidates approvals, so rejoining
+cannot resurrect them. Re-approval releases an older result payload but keeps its audit fingerprint.
+
+`prepareContentUpdate` clones main's existing Yjs state and prepares an incremental
+`y-prosemirror` update. It does not import a fresh document under connected clients.
+The transaction saves before-main, source, and result checkpoint metadata plus
+recovery bytes; only after commit is that prevalidated update published to live
+main. Main keeps its CRDT identities/generation. If committed publication fails,
+the process fail-stops without flushing an old head; restart loads committed bytes.
+The source is archived and its generation advances, fencing old drafts/credentials.
+Request fingerprints make retries retrieve one committed merge.
+
+The adapter uses pinned `y-prosemirror` internals and Yjs item identities. Dependency
+changes require incremental-update, unaffected-block/offline-edit, and anchor
+regression tests; this is not a general tree/character/Office merge engine.
+The compiled API is CommonJS, while the document model is ESM. API callers pass
+bytes to `inspectDocumentState`; they do not construct Yjs documents using a
+separate CommonJS import. Decoding, schema inspection, and constructor-sensitive
+identity traversal stay inside the shared module. Release acceptance exercises
+this actual module boundary; dev-loader success alone would miss the mismatch.
+
+## Discussion and Decision Bookmarks
+
+Text discussion is PostgreSQL-backed and branch-scoped, independent of document
+saving. Workspace-row-locked mutations recheck sessions/roles, reserve a monotonic
+message number and byte quota, and commit before confirming send. Request IDs are
+bound to author/branch/text. Removal erases current body text, retains a tombstone
+and linked decisions, and records an event; retained backups may contain older text.
+Visible pages poll every five seconds and stop/clear cached results after access denial.
+
+Bookmarks bind to a same-branch immutable checkpoint, stable block ID, generation,
+and the exact original Yjs item identity. Availability is checked against durable
+recovery bytes, not a potentially unsaved local editor. Missing/mismatched identities
+become sticky unavailable anchors; copying a block ID never reattaches a decision.
+Normal text edits retain the item; a restore/backup rollback retires its generation.
+Archiving retains unchanged source identities, while a later backup rollback still
+fences them. Read-only original context stays accessible even when live anchors
+are unavailable. Status mutations validate the expected previous status and
+record events. Viewer participation and archived-branch mutations are rejected.
 
 ## Production operations
 

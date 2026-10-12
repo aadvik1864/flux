@@ -12,6 +12,7 @@
     "db:dev": "dotenv -e ../../.env -- prisma migrate dev"
   },
   "dependencies": {
+    "@flux/document-model": "0.1.0",
     "@flux/shared": "0.1.0",
     "@flux/storage": "0.1.0",
     "@nestjs/common": "^12.1.2",

@@ -87,6 +87,7 @@ try:
         run(["docker", "build", "-f", str(source / "deploy/Dockerfile"), "--target", target, "-t", f"flux-{target}:{project}", str(source)])
     run(compose + ["up", "-d", "--wait", "postgres", "object-storage", "inbox"])
     run(compose + ["run", "--rm", "migrate"])
+    run(compose + ["run", "--rm", "--no-deps", "tools", "node", "/app/tests/release/check-document-model.cjs"])
     run(compose + ["up", "-d", "--wait", "collaboration", "api", "web", "gateway"])
     run(compose + ["run", "--rm", "--no-deps", "tools", "node", "dist/operations.js", "smtp-check"])
     run(compose + ["run", "--rm", "--no-deps", "tools", "node", "/app/tests/release/check-mail.mjs"])

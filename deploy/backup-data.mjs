@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { SnapshotStorage, digest, decodeSnapshot } from "@flux/storage";
 
@@ -52,6 +52,7 @@ async function main() {
       await tx.emailMessage.deleteMany();
       await tx.branch.updateMany({ data: { generation: { increment: 1 } } });
       await tx.documentState.updateMany({ data: { generation: { increment: 1 } } });
+      await tx.mergeApproval.updateMany({ where: { supersededAt: null }, data: { supersededAt: new Date(), resultContent: Prisma.DbNull, resolutions: {}, byteLength: 0 } });
       await tx.securityEvent.create({ data: { type: "backup_restored_sessions_revoked" } });
     });
     console.log(JSON.stringify({ event: "backup_restored", checkpoints: checkpoints.length }));

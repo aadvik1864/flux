@@ -5,18 +5,20 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
-import type { Request, Response, NextFunction } from "express";
+import { json, type Request, type Response, type NextFunction } from "express";
 import { env } from "./config";
 import { DatabaseModule } from "./database";
 import { AuthModule } from "./auth";
 import { WorkspacesModule } from "./workspaces";
 import { FilesModule } from "./files";
 import { CheckpointsModule } from "./checkpoints";
+import { BranchesModule } from "./branches";
+import { DiscussionsModule } from "./discussions";
 import { MailModule } from "./mail";
 import { HealthController } from "./health";
 import { requestLog, SafeErrors } from "./http-safety";
 
-@Module({ imports: [DatabaseModule, MailModule, AuthModule, WorkspacesModule, FilesModule, CheckpointsModule], controllers: [HealthController] })
+@Module({ imports: [DatabaseModule, MailModule, AuthModule, WorkspacesModule, FilesModule, CheckpointsModule, BranchesModule, DiscussionsModule], controllers: [HealthController] })
 class AppModule {}
 
 async function main() {
@@ -24,6 +26,12 @@ async function main() {
   app.getHttpAdapter().getInstance().set("trust proxy", env.TRUST_PROXY_HOPS);
   app.use(requestLog);
   app.useGlobalFilters(new SafeErrors());
+  const reviewParser = json({ limit: "256kb" });
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    // A 1,000-block explicit review can exceed the normal small mutation limit.
+    if (request.method === "POST" && /^\/files\/[^/]+\/branches\/[^/]+\/approvals\/?$/i.test(request.path)) reviewParser(request, response, next);
+    else next();
+  });
   app.useBodyParser("json", { limit: "64kb" });
   app.use(helmet());
   app.use(cookieParser());

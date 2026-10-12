@@ -128,6 +128,8 @@ class WorkspacesController {
         // Outstanding duplicate invitations must not let an offboarded member rejoin.
         await tx.invitation.deleteMany({ where: { workspaceId: id, email: member.user.email, acceptedAt: null } });
         await tx.workspaceMember.deleteMany({ where: { workspaceId: id, userId } });
+        // Rejoining later must not resurrect approval granted before offboarding.
+        await tx.mergeApproval.updateMany({ where: { approvedById: userId, branch: { file: { workspaceId: id } }, supersededAt: null }, data: { supersededAt: new Date(), resultContent: Prisma.DbNull, resolutions: {}, byteLength: 0 } });
         await tx.securityEvent.create({ data: { type: "workspace_member_removed", userId } });
       }
       return { ok: true };

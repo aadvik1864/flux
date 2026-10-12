@@ -1,6 +1,7 @@
 # Invite-only production deployment
 
-This kit deploys the **documents and checkpoint-history release**, not the full
+This kit deploys the **document MVP with history, experiments, review, discussion,
+and Decision Bookmarks**, not the full
 planned Flux V1. Run one API, one web server, and one collaboration server on a
 single Linux host. The Docker test uses disposable local certificates and an SMTP
 test sink; it does not establish real-world email delivery, public ACME issuance,
@@ -121,8 +122,18 @@ Status shows at most 100 open quarantines; repeat after resolving those shown.
   Trust exactly the one private Caddy hop. If adding a CDN/proxy, review the trust
   chain and retest spoofed forwarding headers before launch.
 - Quotas: 20 owned workspaces/account; 100 documents, 100 members, and 100 pending
-  invitations/workspace; 1,000 checkpoints/document; 256 MiB referenced checkpoint
+  invitations/workspace; 1,000 checkpoints/branch; 256 MiB referenced checkpoint
   bytes/workspace; 8 MiB recovery state/snapshot. Restores reserve both snapshots.
+- Experiments: at most 20 active / 100 lifetime experiments per document;
+  comparison supports 1,000 top-level blocks. Merge reserves three snapshots.
+  Branch work has a 16-request coordinator queue. Approvals: 10 active/experiment,
+  1,000 lifetime/workspace, 64 MiB active payloads/workspace; supersession/merge
+  releases old payloads. Limits are deliberate MVP safety bounds, not capacity promises.
+- Discussion: 4,000 characters/message, 10,000 lifetime messages/branch,
+  64 MiB live text/workspace; 500 Decision Bookmarks/branch and 1,000/workspace.
+  Five-second visible-page polling is not a WebSocket chat/delivery guarantee.
+  Unsent message text is not browser-backed up. Moderation erases current text;
+  existing backups may retain it until the operator's retention policy removes them.
 - Runtime caps: 100 sockets, 50 active documents, 2 MiB messages; each authenticated
   connection is capped at 1,200 messages / 16 MiB per minute. These are safety caps,
   not a demonstrated 100-user capacity guarantee. Yjs state includes deletion
@@ -173,7 +184,8 @@ python3 deploy/backup.py restore backups/flux-2026-10-11.flux --project flux-rec
 Use the image/release tag that created the backup before migrating newer versions.
 Restore validates encryption, archive paths, database checksum, restored checkpoint
 metadata, migration metadata, and snapshot checksums. It then revokes sessions,
-account/invitation links and queued emails, and advances all room generations.
+account/invitation links and queued emails, supersedes active merge approvals,
+erases their result payloads, and advances all room generations.
 Users must sign in again, and owners must recreate pending invitations. It does
 not start public services. Verify accounts, document contents, historical previews,
 permissions, and readiness in isolation before switching traffic. A partial failed
@@ -217,9 +229,15 @@ operator's server, domain, SMTP identity, and decisions; local fixtures cannot s
 exercise and an encrypted restore drill. It generates its own random project names,
 secrets and local certificates; ports 9443/8028 must be free. It deletes only those
 test projects' volumes. Never substitute your live environment into this test.
+The expanded document-MVP exercise passed locally on 2026-10-12, including verified
+independent review, live-main merging, archived discussion/decision context, and
+encrypted restore of content/checkpoints/decisions with active approvals invalidated.
+This does not satisfy the real-world launch gates above.
 
-The current scope still excludes branches/merging, chat, calls, spreadsheets, and
-presentations. Users must wait for **Saved** before closing the editor. IndexedDB
+The current scope still excludes integrated calls/Live Merge Rooms, Office editing,
+and richer anchored comments/replay. The optional LiveKit feasibility fixture is
+isolated and not included in this production stack. Office licensing is unresolved;
+see `docs/integration-feasibility.md`. Users must wait for **Saved** before closing the editor. IndexedDB
 backs up unacknowledged local edits when available (8 MiB/draft, 32 MiB/account,
 64 MiB/browser, 64 records). Capacity exhaustion never silently evicts a draft;
 users get a warning and can download or discard copies. On returning, drafts require

@@ -51,25 +51,28 @@ class CheckpointsController {
   }
 
   @Get("history-head")
-  async head(@Param("fileId") fileId: string, @Req() request: AuthenticatedRequest): Promise<HistoryHead> {
+  async head(@Param("fileId") fileId: string, @Query() query: unknown, @Req() request: AuthenticatedRequest): Promise<HistoryHead> {
     await this.file(fileId, request);
-    return this.call({ operation: "head", fileId }, request);
+    const data = input(z.object({ branchId: z.string().min(1).max(100).optional() }), query);
+    return this.call({ operation: "head", fileId, ...data }, request);
   }
 
   @Post("checkpoints")
   async create(@Param("fileId") fileId: string, @Body() body: unknown, @Req() request: AuthenticatedRequest): Promise<CheckpointSummary> {
     await this.file(fileId, request, true);
-    const data = input(z.object({ title: z.string().trim().min(1).max(120), requestId: z.uuid() }), body);
+    const data = input(z.object({ title: z.string().trim().min(1).max(120), requestId: z.uuid(), branchId: z.string().min(1).max(100).optional() }), body);
     return this.call({ operation: "checkpoint", fileId, ...data }, request);
   }
 
   @Get("checkpoints")
   async list(@Param("fileId") fileId: string, @Query() query: unknown, @Req() request: AuthenticatedRequest): Promise<CheckpointPage> {
     const file = await this.file(fileId, request);
-    const data = input(z.object({ cursor: z.uuid().optional(), limit: z.coerce.number().int().min(1).max(50).default(25) }), query);
-    if (data.cursor && !await this.db.checkpoint.findFirst({ where: { id: data.cursor, fileId } })) throw new NotFoundException("Checkpoint cursor not found");
+    const data = input(z.object({ branchId: z.string().min(1).max(100).optional(), cursor: z.uuid().optional(), limit: z.coerce.number().int().min(1).max(50).default(25) }), query);
+    const branchId = data.branchId ?? file.mainBranchId!;
+    if (!await this.db.branch.findFirst({ where: { id: branchId, fileId } })) throw new NotFoundException("Editing branch not found");
+    if (data.cursor && !await this.db.checkpoint.findFirst({ where: { id: data.cursor, fileId, branchId } })) throw new NotFoundException("Checkpoint cursor not found");
     const items = await this.db.checkpoint.findMany({
-      where: { fileId, branchId: file.mainBranchId! }, orderBy: { number: "desc" }, take: data.limit + 1,
+      where: { fileId, branchId }, orderBy: { number: "desc" }, take: data.limit + 1,
       ...(data.cursor ? { cursor: { id: data.cursor }, skip: 1 } : {}),
     });
     return { checkpoints: items.slice(0, data.limit).map(summary), nextCursor: items.length > data.limit ? items[data.limit - 1].id : null };

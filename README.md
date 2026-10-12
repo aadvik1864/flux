@@ -4,7 +4,8 @@
 
 Flux is a collaborative workspace for teams. The working flow now includes
 accounts → private workspace → invitation → shared document → durable save
-→ named checkpoint → read-only history → restore as a new revision.
+→ named checkpoint → isolated experiment → discussion → reviewed merge
+→ Decision Bookmark, with read-only history and restore-as-new-revision.
 
 ## Available now
 
@@ -28,15 +29,24 @@ accounts → private workspace → invitation → shared document → durable sa
 - Persistent browser draft backups with explicit review/resume; older restored
   generations are download-only and never replayed automatically.
 - Bounded retry for temporary connection failures without false access denial.
+- Checkpoint-based experiments, isolated editing rooms, conservative stable-block
+  three-way comparison, explicit conflict/order choices, and non-author approval.
+- Incremental, head-validated merges into connected main; preserved main/source
+  checkpoints, archived experiments, and idempotent finalization.
+- Persistent branch-scoped discussion, lost-response send recovery, moderation,
+  and read-only archived discussions.
+- Manually created Decision Bookmarks linking an explanation, checkpoint, exact
+  block identity, and optional discussion; deleted anchors never reattach to copied IDs.
 
-**Not implemented yet:** experimental branch creation, comparison,
-merging, persistent chat, Decision Bookmarks, calls, spreadsheets, presentations,
-Office import/export, and fine-grained replay. The current `main` branch is a
-foundation for branch-isolated sessions, not a completed branching feature.
+**Still separate milestones:** integrated calls/Live Merge Rooms, spreadsheets,
+presentations, Office import/export, richer anchored comments, and fine-grained
+replay. The isolated LiveKit feasibility fixture is not a Flux call feature.
+This remains a locally tested, invite-only document MVP, not completed V1 or live-launch approval.
 
 ## Local development
 
-Requirements: Node.js 22.12+, npm, and Docker with Compose. Ports 3000, 4000,
+Requirements: Node.js 22.22.3 (tested), npm, and Docker with Compose. Optional
+LiveKit prototype SDK dependencies require Node 22.22+. Ports 3000, 4000,
 1234, 5438, 9010, and 9011 must be available.
 
 ```bash
@@ -67,7 +77,7 @@ explicit, bounded resend commands. See the production runbook before closing or 
 ## Production deployment kit
 
 Use [the deployment and recovery runbook](docs/production.md) for the current
-documents/history release. `deploy/` includes non-root images, a private database
+document MVP. `deploy/` includes non-root images, a private database
 and snapshot service, a same-origin HTTPS/WSS gateway, health checks, resource
 limits, a single-sync-server lease, and authenticated encrypted backup/restore.
 `npm run test:release` exercises a separate production-mode Docker stack.
@@ -116,6 +126,31 @@ For an existing checkout, add the S3 variables from `.env.example`, run
 before restarting the app. Existing accounts and documents are preserved.
 Refresh already-open editor tabs after this upgrade; collaboration rooms now
 include a generation number to fence restored sessions.
+
+### Experiments, review, and decisions
+
+1. Save a main checkpoint. An owner/admin/editor opens **Experiments** and creates
+   an experiment from it. Work in that room leaves main unchanged.
+2. Save experiment checkpoints when you need decision context. Open
+   **Discussion & decisions** to exchange persistent text and create a bookmark.
+   Unsent chat text is not backed up; send before leaving.
+3. Open **Review merge**. Review base, main, experiment, and the proposed result.
+   Competing edits, edit/delete cases, experiment-side list/table changes, and
+   ambiguous ordering need explicit whole-block/order choices.
+4. A different owner/admin/reviewer approves the exact heads and result. The
+   creator cannot approve their own experiment. Any new edit invalidates approval.
+5. A merge-capable teammate chooses **Finalize approved merge**, reviews the exact
+   stored approved result, and confirms. Flux preserves main/source checkpoints,
+   incrementally updates live main, and archives the experiment.
+
+Main keeps its editing generation during a merge. The source generation retires:
+unsent experiment drafts become download-only, never replayed into archived content.
+Bookmarks show anchor availability from the last durable save and retain original
+read-only checkpoint context if a block disappears. A recreated block with a copied
+ID is not the original anchor. Status changes are explicit and audited.
+
+Merge review is limited to 1,000 top-level blocks. This is not character-level or
+Office semantic merging, nested branching, repeated merges, or perfect authorship.
 
 ### Workspace controls
 
@@ -195,6 +230,7 @@ packages/document-model/ Versioned editor schema and content/Yjs adapters
 packages/storage/     Private S3 snapshot adapter and integrity envelope
 tests/unit/           Permissions, credentials, Yjs/schema/storage primitives
 tests/e2e/            Browser collaboration, history, and authorization checks
+tests/integrations/   Optional isolated LiveKit feasibility fixture
 docs/                 Architecture, requirements, roadmap, testing, Office evaluation
 ```
 
@@ -230,3 +266,6 @@ dependency `deepmerge-ts` is overridden to patched 8.x; schema validation,
 client generation, and migrations must remain tested when changing this override.
 
 See [the roadmap](docs/roadmap.md) for the next milestone.
+See [integration feasibility](docs/integration-feasibility.md) for the self-hosted/free
+constraint and remaining calls/Office gates. `npm run test:livekit` runs only a
+disposable Docker prototype, publishes no host ports, and uses generated test keys.

@@ -50,7 +50,7 @@ try {
   assert.equal(response.headers()["referrer-policy"], "no-referrer");
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   assert.equal((await context.request.post(`${origin}/api/auth/logout`, { headers: { Origin: "https://not-flux.example.com" } })).status(), 403);
-  for (const path of ["/internal/history", "/api/internal/history", "/sync/internal/history", "/sync/ready"]) assert.equal((await page.evaluate(async path => (await fetch(path)).status, path)), 404);
+  for (const path of ["/internal/history", "/api/internal/history", "/sync/internal/history", "/internal/branches", "/api/internal/branches", "/sync/internal/branches", "/sync/ready"]) assert.equal((await page.evaluate(async path => (await fetch(path)).status, path)), 404);
   assert.equal((await request(page, "/auth/register", { name: "Uninvited", email: "uninvited@example.com" })).status, 403);
   assert.equal((await request(page, "/auth/options", undefined, "GET")).data.inviteOnly, true);
   assert.equal((await request(page, "/auth/register", { name: "x".repeat(70_000), email: "large@example.com" })).status, 413);
@@ -112,7 +112,7 @@ try {
   await page.getByLabel("Checkpoint name").fill("Production deployment checkpoint");
   await page.getByRole("dialog").getByRole("button", { name: "Save checkpoint", exact: true }).click();
   await expect(page.locator(".checkpoint-notice")).toContainText("Production deployment checkpoint");
-  const head = await request(page, `/files/${file.data.id}/history-head`, undefined, "GET");
+  let head = await request(page, `/files/${file.data.id}/history-head`, undefined, "GET");
   assert.equal(head.status, 200);
   await page.screenshot({ path: `${directory}/production-editor.png`, fullPage: true });
   // Exercise IndexedDB recovery under the actual HTTPS/CSP production build, not
@@ -160,7 +160,74 @@ try {
   await memberPage.getByRole("button", { name: "Join workspace", exact: true }).click();
   await expect(memberPage.getByRole("heading", { name: "Release smoke workspace", exact: true })).toBeVisible();
   assert.equal((await request(memberPage, `/workspaces/${workspaceId}/files`, { name: "forbidden" })).status, 403);
+  const detail = await request(page, `/files/${file.data.id}`, undefined, "GET");
+  assert.equal(detail.status, 200);
+  assert.equal((await request(memberPage, `/files/${file.data.id}/branches/${detail.data.mainBranchId}/messages`, { body: "Viewer cannot post", requestId: crypto.randomUUID() })).status, 403);
+  await memberPage.goto(`/files/${file.data.id}/discuss`);
+  await expect(memberPage.getByRole("heading", { name: "Decision Bookmarks", exact: true })).toBeVisible();
+  await expect(memberPage.getByLabel("Your message")).toHaveCount(0);
   await memberContext.close();
+
+  // A separately verified teammate approves the exact live comparison. No shared
+  // owner cookie can stand in for independent review.
+  assert.equal((await request(page, `/workspaces/${workspaceId}/invitations`, { email: "reviewer@example.com", role: "REVIEWER" })).status, 201);
+  const reviewerLink = await emailLink("reviewer@example.com", /https:\/\/flux\.example\.com:9443\/invite\/[A-Za-z0-9_-]{43}/);
+  const reviewerContext = await newContext(), reviewerPage = await reviewerContext.newPage();
+  await reviewerPage.goto("/login");
+  assert.equal((await request(reviewerPage, "/auth/register", { name: "Release reviewer", email: "reviewer@example.com", invitationToken: new URL(reviewerLink).pathname.split("/").at(-1) })).status, 201);
+  const reviewerVerify = await emailLink("reviewer@example.com", /https:\/\/flux\.example\.com:9443\/account\/verify-email#[A-Za-z0-9_-]{43}/);
+  await reviewerPage.goto(reviewerVerify);
+  await reviewerPage.getByLabel("New password", { exact: true }).fill(password); await reviewerPage.getByLabel("Confirm password").fill(password);
+  await reviewerPage.getByRole("button", { name: "Verify email and continue" }).click();
+  await expect(reviewerPage).toHaveURL(origin + "/");
+  assert.equal((await request(reviewerPage, `/invitations/${new URL(reviewerLink).pathname.split("/").at(-1)}/accept`, undefined)).status, 201);
+  const baseline = (await request(page, `/files/${file.data.id}/checkpoints`, undefined, "GET")).data.checkpoints[0];
+  const experiment = await request(page, `/files/${file.data.id}/branches`, { name: "Release experiment", checkpointId: baseline.id, requestId: crypto.randomUUID() });
+  assert.equal(experiment.status, 201);
+  const branchId = experiment.data.id, branchPath = `/files/${file.data.id}/branches/${branchId}`;
+  const experimentPage = await context.newPage(); await experimentPage.goto(branchPath);
+  const experimentEditor = experimentPage.getByRole("textbox", { name: "Document content" }); await expect(experimentEditor).toBeVisible();
+  await experimentEditor.click(); await experimentPage.keyboard.press("ControlOrMeta+End"); await experimentPage.keyboard.press("Enter"); await experimentPage.keyboard.insertText("Approved experiment conclusion.");
+  await expect(experimentPage.locator(".save-status")).toHaveText("Saved"); await expect(editor).not.toContainText("Approved experiment conclusion");
+  await editor.click(); await page.keyboard.press("ControlOrMeta+End"); await page.keyboard.insertText(" Main-only note preserved."); await expect(page.locator(".save-status")).toHaveText("Saved");
+  const branchCheckpoint = await request(experimentPage, `/files/${file.data.id}/checkpoints`, { branchId, title: "Experiment decision context", requestId: crypto.randomUUID() }); assert.equal(branchCheckpoint.status, 201);
+  const savedContext = await request(experimentPage, `/files/${file.data.id}/checkpoints/${branchCheckpoint.data.id}`, undefined, "GET"); assert.equal(savedContext.status, 200);
+  const sendBody = { body: "Keep the main note and add the conclusion.", requestId: crypto.randomUUID() };
+  const discussion = await request(experimentPage, `${branchPath}/messages`, sendBody); assert.equal(discussion.status, 201);
+  assert.equal((await request(experimentPage, `${branchPath}/messages`, sendBody)).data.id, discussion.data.id);
+  const bookmark = await request(experimentPage, `${branchPath}/decisions`, { title: "Add the conclusion", explanation: "The reviewer agreed to keep current main and the experiment's addition.", checkpointId: branchCheckpoint.data.id,
+    blockId: savedContext.data.content.content.at(-1).attrs.blockId, discussionMessageId: discussion.data.id, requestId: crypto.randomUUID() });
+  assert.equal(bookmark.status, 201); assert.equal(bookmark.data.anchorAvailable, true);
+  assert.equal((await request(experimentPage, `${branchPath}/decisions/${bookmark.data.id}`, { expectedStatus: "OPEN", status: "DECIDED" }, "PATCH")).status, 200);
+  const comparison = await request(reviewerPage, `${branchPath}/compare`, undefined, "GET"); assert.equal(comparison.status, 200); assert.deepEqual(comparison.data.conflicts, []);
+  assert.equal((await request(experimentPage, `${branchPath}/approvals`, { requestId: crypto.randomUUID(), mainHead: comparison.data.mainHead, sourceHead: comparison.data.sourceHead, resolutions: {} })).status, 403);
+  await reviewerPage.goto(`${branchPath}/review`);
+  await reviewerPage.getByRole("button", { name: "Approve reviewed result", exact: true }).click();
+  const finalize = reviewerPage.getByRole("button", { name: "Finalize approved merge", exact: true }); await expect(finalize).toBeEnabled(); await finalize.click();
+  await expect(reviewerPage.getByRole("textbox", { name: "Review document content" })).toContainText("Main-only note preserved");
+  await expect(reviewerPage.getByRole("textbox", { name: "Review document content" })).toContainText("Approved experiment conclusion");
+  await reviewerPage.getByRole("button", { name: "Confirm approved merge", exact: true }).click();
+  await expect(reviewerPage).toHaveURL(`${origin}/files/${file.data.id}`);
+  await expect(editor).toContainText("Main-only note preserved"); await expect(editor).toContainText("Approved experiment conclusion"); await expect(page.locator(".save-status")).toHaveText("Saved");
+  await expect(experimentEditor).toHaveAttribute("contenteditable", "false");
+  assert.equal((await request(experimentPage, `${branchPath}/messages`, { body: "Archived", requestId: crypto.randomUUID() })).status, 409);
+  await experimentPage.goto(`/files/${file.data.id}/discuss?branchId=${branchId}`);
+  await expect(experimentPage.getByRole("list", { name: "Saved messages" })).toContainText("Keep the main note");
+  await experimentPage.getByRole("button", { name: "View saved context", exact: true }).click();
+  await expect(experimentPage.getByRole("textbox", { name: "Decision checkpoint content" })).toHaveAttribute("contenteditable", "false");
+  await expect(experimentPage.getByRole("textbox", { name: "Decision checkpoint content" })).toContainText("Approved experiment conclusion");
+  await experimentPage.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await experimentPage.screenshot({ path: `${directory}/production-decisions.png`, fullPage: true });
+  head = await request(page, `/files/${file.data.id}/history-head`, undefined, "GET"); assert.equal(head.status, 200); assert.equal(head.data.generation, comparison.data.mainHead.generation);
+  const mainCheckpoints = (await request(page, `/files/${file.data.id}/checkpoints`, undefined, "GET")).data.checkpoints;
+  const branchCheckpoints = (await request(page, `/files/${file.data.id}/checkpoints?branchId=${branchId}`, undefined, "GET")).data.checkpoints;
+  assert.equal(mainCheckpoints.length, 3); assert.equal(branchCheckpoints.length, 2);
+  // A pending approval must not survive a backup rollback as an actionable review.
+  const pendingExperiment = await request(page, `/files/${file.data.id}/branches`, { name: "Pending backup review", checkpointId: baseline.id, requestId: crypto.randomUUID() }); assert.equal(pendingExperiment.status, 201);
+  const pendingPath = `/files/${file.data.id}/branches/${pendingExperiment.data.id}`;
+  const pendingComparison = await request(reviewerPage, `${pendingPath}/compare`, undefined, "GET"); assert.equal(pendingComparison.status, 200);
+  const pendingApproval = await request(reviewerPage, `${pendingPath}/approvals`, { requestId: crypto.randomUUID(), sourceHead: pendingComparison.data.sourceHead, mainHead: pendingComparison.data.mainHead, resolutions: {} }); assert.equal(pendingApproval.status, 201);
+  await reviewerContext.close(); await experimentPage.close();
   // Recovery notices don't reveal whether an account exists.
   const unknown = await request(page, "/auth/forgot-password", { email: "unknown@example.com" });
   const recovery = await request(page, "/auth/forgot-password", { email: "owner@example.com" });
@@ -183,11 +250,12 @@ try {
   assert.equal((await request(recoveryPage, "/auth/login", { email: "throttled@example.com", password: "wrong password" })).status, 429);
   assert.equal((await request(recoveryPage, "/AUTH/LOGIN/", { email: "Throttled@EXAMPLE.com", password: "wrong password" })).status, 429);
   const result = { workspaceId, fileId: file.data.id, contentHash: head.data.contentHash, generation: head.data.generation,
-    draftFileId: draftFile.data.id, draftContentHash: draftHead.data.contentHash, draftGeneration: draftHead.data.generation };
+    draftFileId: draftFile.data.id, draftContentHash: draftHead.data.contentHash, draftGeneration: draftHead.data.generation,
+    branchId, bookmarkId: bookmark.data.id, discussionId: discussion.data.id, pendingApprovalId: pendingApproval.data.id, checkpointCount: mainCheckpoints.length + branchCheckpoints.length };
   await writeFile(`${directory}/state.json`, JSON.stringify(result), { mode: 0o600 });
   assert.deepEqual(violations, []);
   await recoveryContext.close();
-  console.log("Production HTTPS/browser checks passed: invitation, SMTP/TLS, verification, reset races, sessions, CSP, roles, eight-client convergence, durable save, checkpoint, and explicit browser-draft recovery.");
+  console.log("Production HTTPS/browser checks passed: identity/recovery, CSP/roles, eight-client convergence, durable saves, browser drafts, live reviewed merging, archived discussions, and linked Decision Bookmarks.");
 } catch (error) {
   await writeFile(`${diagnostics}/browser.json`, JSON.stringify({ networkFailures, violations }, null, 2), { mode: 0o600 });
   await Promise.allSettled(browser.contexts().flatMap(context => context.pages()).map((page, index) => page.screenshot({ path: `${diagnostics}/failure-page-${index}.png`, fullPage: true })));

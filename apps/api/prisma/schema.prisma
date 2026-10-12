@@ -19,11 +19,20 @@ enum CheckpointKind {
   MANUAL
   BEFORE_RESTORE
   RESTORE
+  BEFORE_MERGE
+  MERGE
+  MERGED_EXPERIMENT
 }
 
 enum ActivityKind {
   CHECKPOINT_CREATED
   DOCUMENT_RESTORED
+  BRANCH_CREATED
+  MERGE_APPROVED
+  BRANCH_MERGED
+  DECISION_CREATED
+  DECISION_STATUS_CHANGED
+  DISCUSSION_MESSAGE_REMOVED
 }
 
 model User {
@@ -38,6 +47,10 @@ model User {
   checkpoints  Checkpoint[]      @relation("CheckpointCreator")
   activities   ActivityEvent[]   @relation("ActivityActor")
   accountTokens AccountToken[]
+  experiments Branch[] @relation("ExperimentCreator")
+  mergeApprovals MergeApproval[]
+  discussionMessages DiscussionMessage[]
+  decisions DecisionBookmark[]
 }
 
 enum AccountTokenPurpose {
@@ -177,6 +190,20 @@ model Branch {
   generation   Int            @default(0)
   checkpointNumber Int        @default(0)
   checkpoints  Checkpoint[]
+  baseCheckpointId String?
+  baseCheckpoint Checkpoint? @relation("ExperimentBase", fields: [baseCheckpointId], references: [id], onDelete: NoAction)
+  createdById String?
+  createdByName String @default("")
+  createdBy User? @relation("ExperimentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  archivedAt DateTime?
+  requestId String? @unique
+  requestHash String?
+  approvals MergeApproval[]
+  discussionSequence Int @default(0)
+  discussionBytes Int @default(0)
+  decisionSequence Int @default(0)
+  discussionMessages DiscussionMessage[]
+  decisions DecisionBookmark[]
 
   @@unique([fileId, name])
 }
@@ -218,9 +245,33 @@ model Checkpoint {
   restoredAs            Checkpoint[]   @relation("RestoredFrom")
   preservedCheckpoint   Checkpoint?    @relation("PreservedBeforeRestore", fields: [preservedCheckpointId], references: [id], onDelete: SetNull)
   preservedBy           Checkpoint[]   @relation("PreservedBeforeRestore")
+  experiments           Branch[] @relation("ExperimentBase")
+  decisions             DecisionBookmark[]
 
   @@unique([branchId, number])
   @@index([fileId, createdAt])
+}
+
+model MergeApproval {
+  id String @id @default(uuid())
+  branchId String
+  approvedById String?
+  approvedByName String
+  createdAt DateTime @default(now())
+  sourceHead Json
+  mainHead Json
+  baseChecksum String
+  resultContent Json?
+  byteLength Int @default(0)
+  supersededAt DateTime?
+  resultHash String
+  resolutions Json
+  requestId String @unique
+  requestHash String
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  approvedBy User? @relation(fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([branchId, supersededAt])
 }
 
 model ActivityEvent {
@@ -238,4 +289,56 @@ model ActivityEvent {
 
   @@index([workspaceId, createdAt])
   @@index([fileId, createdAt])
+}
+
+model DiscussionMessage {
+  id String @id @default(uuid())
+  branchId String
+  number Int
+  authorId String?
+  authorName String
+  body String
+  byteLength Int
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+  requestId String @unique
+  requestHash String
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  decisions DecisionBookmark[]
+
+  @@unique([branchId, number])
+}
+
+enum DecisionStatus {
+  OPEN
+  DECIDED
+  SUPERSEDED
+}
+
+model DecisionBookmark {
+  id String @id @default(uuid())
+  branchId String
+  number Int
+  title String
+  explanation String
+  status DecisionStatus @default(OPEN)
+  createdById String?
+  createdByName String
+  createdAt DateTime @default(now())
+  checkpointId String
+  blockId String
+  anchorGeneration Int
+  anchorIdentity String
+  unavailableAt DateTime?
+  discussionMessageId String?
+  requestId String @unique
+  requestHash String
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  checkpoint Checkpoint @relation(fields: [checkpointId], references: [id], onDelete: NoAction)
+  discussionMessage DiscussionMessage? @relation(fields: [discussionMessageId], references: [id], onDelete: SetNull)
+
+  @@unique([branchId, number])
+  @@index([checkpointId])
 }

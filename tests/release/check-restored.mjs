@@ -24,6 +24,12 @@ try {
   assert.equal(await db.accountToken.count(), 0);
   assert.equal(await db.invitation.count(), 0);
   assert.equal(await db.emailMessage.count(), 0);
-  assert.equal(await db.checkpoint.count(), 1);
-  console.log("Restored shared and recovered-draft documents/hashes/checkpoint verified; sessions revoked and generations fenced.");
+  assert.equal(await db.checkpoint.count(), state.checkpointCount);
+  const bookmark = await db.decisionBookmark.findUniqueOrThrow({ where: { id: state.bookmarkId } });
+  assert.equal(bookmark.status, "DECIDED"); assert.equal(bookmark.discussionMessageId, state.discussionId);
+  const message = await db.discussionMessage.findUniqueOrThrow({ where: { id: state.discussionId } }); assert.equal(message.body, "Keep the main note and add the conclusion.");
+  const branch = await db.branch.findUniqueOrThrow({ where: { id: state.branchId } }); assert.ok(branch.archivedAt); assert.ok(branch.generation > bookmark.anchorGeneration + 1);
+  const approval = await db.mergeApproval.findUniqueOrThrow({ where: { id: state.pendingApprovalId } });
+  assert.ok(approval.supersededAt); assert.equal(approval.resultContent, null); assert.equal(approval.byteLength, 0);
+  console.log("Restored document hashes, merge checkpoints, discussion, and decisions verified; credentials/approvals revoked and generations fenced.");
 } finally { await db.$disconnect(); }

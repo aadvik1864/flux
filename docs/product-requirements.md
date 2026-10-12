@@ -22,9 +22,10 @@ Target users are college teams, startups, research groups, and small teams.
 - Safe merge into the authoritative live state and an immutable resulting checkpoint.
 - Basic manually created Decision Bookmarks.
 
-The current implementation includes the initial foundation/document slice and
-checkpoints/read-only history/restore. Branching, review, merging, chat, and
-Decision Bookmarks are still future work; this is not the completed MVP or V1.
+The current local document MVP includes history/restore, experiment creation,
+conservative block review, exact-head approval, safe incremental merging,
+branch-scoped discussion, and manual Decision Bookmarks. Full V1 and operator
+launch approval remain separate; local acceptance is not security/load certification.
 
 ### Full V1
 
@@ -55,9 +56,11 @@ silent conflict resolution, or promised perfect Office-format compatibility.
 | Reviewer | No | No | Yes | Yes | No |
 | Viewer | No | No | No | No | No |
 
-Future review/branch permissions are defined in the shared policy, but their
-features/endpoints do not exist yet. First-slice invitations assign Editor,
-Reviewer, or Viewer; role reassignment and ownership transfer are deferred.
+Owner/admin/editor/reviewer roles may discuss and create Decision Bookmarks.
+Viewers read discussion/decisions only. Authors or reviewers may remove message
+text and change decision status; merged experiments are otherwise read-only.
+Invitations assign Editor, Reviewer, or Viewer; role reassignment and ownership
+transfer are deferred. The experiment creator cannot approve their own merge.
 
 ## History invariants
 

@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
-import type { Checkpoint, PrismaClient } from "@prisma/client";
+import { Prisma, type Checkpoint, type PrismaClient } from "@prisma/client";
 import * as Y from "yjs";
 import { z } from "zod";
-import { can, branchRoom, type CheckpointSummary, type HistoryHead, type RestoreResult } from "@flux/shared";
+import { can, branchRoom, type CheckpointSummary, type HistoryHead, type RestoreResult, type Permission } from "@flux/shared";
 import { DOCUMENT_SCHEMA_VERSION, contentFromYDoc, validateDocument, yDocFromContent } from "@flux/document-model";
 import { digest, encodeSnapshot, SnapshotStorage, type SnapshotPayload } from "@flux/storage";
 import type { Document, Hocuspocus } from "@hocuspocus/server";
 import { RoomGate } from "./room-gate.js";
 
 export const historyCommandSchema = z.discriminatedUnion("operation", [
-  z.object({ operation: z.literal("head"), fileId: z.string().max(100) }),
-  z.object({ operation: z.literal("checkpoint"), fileId: z.string().max(100), title: z.string().trim().min(1).max(120), requestId: z.uuid() }),
+  z.object({ operation: z.literal("head"), fileId: z.string().max(100), branchId: z.string().min(1).max(100).optional() }),
+  z.object({ operation: z.literal("checkpoint"), fileId: z.string().max(100), branchId: z.string().min(1).max(100).optional(), title: z.string().trim().min(1).max(120), requestId: z.uuid() }),
   z.object({
     operation: z.literal("restore"), fileId: z.string().max(100), checkpointId: z.uuid(), requestId: z.uuid(),
     expectedGeneration: z.number().int().nonnegative(), expectedRevision: z.number().int().nonnegative(),
@@ -34,7 +34,7 @@ export function checkpointSummary(checkpoint: Checkpoint): CheckpointSummary {
   };
 }
 
-async function requireAccess(db: Pick<PrismaClient, "session" | "workspaceMember">, workspaceId: string, userId: string, sessionId: string, edit: boolean) {
+export async function requireAccess(db: Pick<PrismaClient, "session" | "workspaceMember">, workspaceId: string, userId: string, sessionId: string, edit: boolean | Permission) {
   const [session, member] = await Promise.all([
     db.session.findUnique({ where: { id: sessionId }, include: { user: { select: { emailVerifiedAt: true } } } }),
     db.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId } } }),
@@ -42,7 +42,7 @@ async function requireAccess(db: Pick<PrismaClient, "session" | "workspaceMember
   if (!session || session.userId !== userId || session.expiresAt <= new Date()) throw new HistoryError(401, "Your session expired");
   if (process.env.REQUIRE_EMAIL_VERIFICATION === "true" && !session.user.emailVerifiedAt) throw new HistoryError(403, "Verify your email before opening document history");
   if (!member) throw new HistoryError(404, "Document not found");
-  if (edit && !can(member.role, "edit")) throw new HistoryError(403, "Your role cannot change document history");
+  if (edit && !can(member.role, edit === true ? "edit" : edit)) throw new HistoryError(403, "Your role cannot perform this document action");
 }
 
 export class HistoryCoordinator {
@@ -61,7 +61,10 @@ export class HistoryCoordinator {
     const user = await this.db.user.findUnique({ where: { id: userId } });
     if (!user) throw new HistoryError(401, "Your session expired");
 
-    const room = branchRoom(file.mainBranch.id, file.mainBranch.generation);
+    const editingBranch = command.operation !== "restore" && command.branchId
+      ? await this.db.branch.findFirst({ where: { id: command.branchId, fileId: file.id } }) : file.mainBranch;
+    if (!editingBranch) throw new HistoryError(404, "Editing branch not found");
+    const room = branchRoom(editingBranch.id, editingBranch.generation);
     return this.gate.run(`history-workspace:${file.workspaceId}`, () => this.gate.run(room, async () => {
       // A request may have waited behind a slow upload or a restore. Recheck
       // before exposing the head or returning an idempotent previous result.
@@ -77,8 +80,9 @@ export class HistoryCoordinator {
             : checkpointSummary(existing);
         }
       }
-      const currentBranch = await this.db.branch.findUniqueOrThrow({ where: { id: file.mainBranch!.id } });
-      if (currentBranch.generation !== file.mainBranch!.generation) throw new HistoryError(409, "Main changed. Refresh history and try again");
+      const currentBranch = await this.db.branch.findUniqueOrThrow({ where: { id: editingBranch.id } });
+      if (currentBranch.generation !== editingBranch.generation) throw new HistoryError(409, "The editing session changed. Refresh history and try again");
+      if (currentBranch.archivedAt && command.operation !== "head") throw new HistoryError(409, "Merged experiments are read-only");
 
       // A direct connection pins the authoritative room while the operation runs.
       const direct = await instance.openDirectConnection(room);
@@ -105,6 +109,7 @@ export class HistoryCoordinator {
           const objectKey = `${file.workspaceId}/${file.id}/${currentBranch.id}/${id}.json`;
           const stored = await this.storage.put(objectKey, snapshot);
           const checkpoint = await this.db.$transaction(async tx => {
+            await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Workspace" WHERE "id" = ${file.workspaceId} FOR UPDATE`);
             await requireAccess(tx, file.workspaceId, userId, sessionId, true);
             const branch = await tx.branch.update({ where: { id: currentBranch.id }, data: { checkpointNumber: { increment: 1 } } });
             await tx.documentState.upsert({
@@ -154,6 +159,7 @@ export class HistoryCoordinator {
           // Drain earlier debounced persistence before replacing the recovery epoch.
           await this.persist(room, document);
           const restored = await this.db.$transaction(async tx => {
+            await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Workspace" WHERE "id" = ${file.workspaceId} FOR UPDATE`);
             await requireAccess(tx, file.workspaceId, userId, sessionId, true);
             const updated = await tx.branch.updateMany({ where: { id: currentBranch.id, generation: version.generation }, data: {
               generation: nextVersion.generation, checkpointNumber: { increment: 2 },
