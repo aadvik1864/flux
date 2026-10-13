@@ -1,5 +1,10 @@
 # Invite-only production deployment
 
+For a personal project on an existing machine, use `docs/private-access.md` instead
+of publishing this public-host configuration. It overlays the same application
+protections with private-IP-only HTTPS and small host jobs. Do not start this base
+Compose file alone when you intend private-only access.
+
 This kit deploys the **document MVP with history, experiments, review, discussion,
 and Decision Bookmarks**, not the full
 planned Flux V1. Run one API, one web server, and one collaboration server on a

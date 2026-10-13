@@ -206,6 +206,43 @@ The explicit-caret regression passed six fresh fixtures per browser (12 checks,
 no failure retries), and type checks passed. Evidence:
 `/tmp/opencode/flux-ci-caret-repeated.log`.
 
+### Personal private-access checks
+
+`npm run test:private` checks private-only port/origin resolution, preserved
+verified/invite-only authentication, independently generated protected secrets,
+Docker context/environment isolation, startup image preflight, serialized writer
+jobs, stalled-operation alerts, replica loss/collision refusal, backup-age/disk
+health, redacted HTTPS notifications, and preservation of unrelated user units.
+Timer templates are also checked with `systemd-analyze --user verify` without
+installing or enabling them on the operator's machine.
+
+`npm run test:release:private` runs the same frozen-source document-MVP acceptance
+through the unmodified private overlay, then exports its public CA and verifies
+HTTPS readiness with hostname/CA validation enabled. It exercises the locked host
+backup wrapper and a fresh private project's restore/populated-target refusal.
+The SMTP and browser services added by the fixture are disposable test helpers,
+not part of the private deployment. The fixture does not validate real Tailscale
+ACLs, other-device trust stores, real inbox delivery, removable/NAS storage, image
+vulnerability scanning, or installed timer execution.
+
+Use `private-access.md` and `private-checklist.md` for limited personal acceptance;
+these checks do not complete the broader public launch record.
+
+Local validation on 2026-10-13 passed 35 private-host checks, all 93 application
+units, type checks, production build, and a zero-vulnerability dependency audit.
+Generated timer templates passed systemd verification without installation.
+Both the public-kit regression and final private-overlay Docker exercise passed,
+including eight-client convergence, verified reviewed merging, archived decision
+context, singleton fencing, encrypted restore, and populated-target refusal. The
+private exercise also passed hostname-verified HTTPS with its exported public CA
+and the locked host backup wrapper. Evidence:
+`/tmp/opencode/flux-private-public-regression.log` (artifacts
+`/tmp/opencode/flux-release-of0rop3n/`) and
+`/tmp/opencode/flux-private-release-final.log` (artifacts
+`/tmp/opencode/flux-release-b74n73we/`). The operator's private configuration is
+initialized but SMTP is unconfigured; no live private stack or user timers were
+enabled. Image scanning and real-device/network/storage acceptance remain pending.
+
 ## Optional integration fixture
 
 `npm run test:livekit` passed on 2026-10-12 using pinned unmodified LiveKit and a

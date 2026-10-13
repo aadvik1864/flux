@@ -11,3 +11,5 @@ test-results/
 *.log
 deploy/production.env
 backups/
+.flux-private/
+__pycache__/

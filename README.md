@@ -76,6 +76,12 @@ explicit, bounded resend commands. See the production runbook before closing or 
 
 ## Production deployment kit
 
+For an existing machine and a few trusted users, start with the
+[personal private-access guide](docs/private-access.md): private VPN binding,
+private-CA HTTPS, generated protected configuration, and optional backup/maintenance
+timers. This does not expose Flux publicly or change your VPN settings. SMTP and
+client certificate trust still need your setup.
+
 Use [the deployment and recovery runbook](docs/production.md) for the current
 document MVP. `deploy/` includes non-root images, a private database
 and snapshot service, a same-origin HTTPS/WSS gateway, health checks, resource

@@ -16,9 +16,13 @@ parser.add_argument("action", choices=["backup", "restore"])
 parser.add_argument("archive", type=Path)
 parser.add_argument("--env-file", type=Path, default=root / "deploy/production.env")
 parser.add_argument("--project", default="flux-production")
+parser.add_argument("--compose-override", type=Path, action="append", default=[], help="Additional Compose file; repeat for the private-access overlay or a fixture")
+parser.add_argument("--docker-context", help="Explicit Docker context (private kit pins the local default context)")
 parser.add_argument("--confirm-empty", action="store_true")
 args = parser.parse_args()
-compose = ["docker", "compose", "--env-file", str(args.env_file.resolve()), "--project-name", args.project, "-f", str(root / "deploy/compose.prod.yaml")]
+compose = ["docker"] + (["--context", args.docker_context] if args.docker_context else []) + ["compose", "--env-file", str(args.env_file.resolve()), "--project-name", args.project, "-f", str(root / "deploy/compose.prod.yaml")]
+for override in args.compose_override:
+    compose += ["-f", str(override.resolve())]
 archive = args.archive.resolve()
 
 def run(command, **kwargs):
@@ -68,7 +72,14 @@ def main():
                     tar.add(path, arcname=path.name)
             tool(directory, "seal-backup.mjs", "encrypt", "/backup/raw.tar", "/backup/sealed.flux", key=True)
             # Atomic create, not replace: even a race cannot overwrite an existing backup.
+            with (directory / "sealed.flux").open("rb") as sealed:
+                os.fsync(sealed.fileno())
             os.link(directory / "sealed.flux", archive)
+            descriptor = os.open(archive.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
             print(f"Encrypted backup created: {archive}")
         else:
             running = run(compose + ["ps", "--status", "running", "--services"], capture_output=True, text=True).stdout.splitlines()

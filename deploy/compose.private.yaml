@@ -1,0 +1,14 @@
+# Always use together with compose.prod.yaml. Never publish a wildcard address.
+services:
+  gateway:
+    ports: !override
+      - target: ${FLUX_PRIVATE_PORT:-8443}
+        published: "${FLUX_PRIVATE_PORT:-8443}"
+        host_ip: ${FLUX_BIND_IP:-127.0.0.1}
+        protocol: tcp
+    environment:
+      FLUX_PRIVATE_PORT: ${FLUX_PRIVATE_PORT:-8443}
+    volumes: !override
+      - ./Caddyfile.private:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config

@@ -10,6 +10,7 @@ test-results
 playwright-report
 coverage
 backups
+**/.flux-private
 **/__pycache__
 **/*.log
 **/*.tsbuildinfo

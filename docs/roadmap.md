@@ -82,6 +82,8 @@ spreadsheets/presentations and file-level snapshots; document format limitations
 - [x] Persistent browser drafts, explicit recovery, and transient-outage retry.
 - [x] Invalid-link password-work preflights, mail quarantine, independent HTTPS
   notification hooks, and controlled operator resend/acknowledgement.
+- [x] Personal private-network overlay, protected configuration generation,
+  preflight checks, and opt-in locked backup/maintenance/health timers.
 - [ ] Real hosting/domain/SMTP identity and delivery configured by the operator.
 - [ ] External monitoring/alerts and off-host backup custody on the target host.
 - [ ] Target-host sustained load, device coverage, privacy/deletion/export procedures.

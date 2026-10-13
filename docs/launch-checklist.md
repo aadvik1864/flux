@@ -1,5 +1,9 @@
 # Operator launch evidence
 
+For strictly personal, low-risk private access, use `docs/private-checklist.md`.
+The gates below are the broader public/invited-service launch record; a personal
+acceptance decision does not mark these gates completed.
+
 Copy this record to private operator storage; do not commit credentials, bearer
 links, personal data, or server-access details. Until each gate has evidence and an
 owner's approval, the document MVP is **not cleared for live use**.
