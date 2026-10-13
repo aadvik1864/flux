@@ -1,89 +1,50 @@
-# Free/self-hosted integration gates
+# Future integration constraints
 
-Evidence checked **2026-10-12**. No hosted subscription, paid license, or public
-deployment has been selected. A working local prototype does not establish
-capacity, device support, license suitability, or production integration.
+Calls and Office editing are outside the document MVP and public showcase.
+Integrations must be self-hostable without a paid subscription; hosting resources
+and license obligations still apply. The license review below was made on
+2026-10-12 and must be repeated for the exact release selected later.
 
-## Calls: LiveKit local feasibility passed
+## Calls
 
-The server and JavaScript SDKs use Apache-2.0:
-[server license](https://github.com/livekit/livekit/blob/v1.13.9/LICENSE),
-[client](https://github.com/livekit/client-sdk-js),
-[server SDK](https://github.com/livekit/server-sdk-js).
-[Self-hosting documentation](https://docs.livekit.io/transport/self-hosting/)
-confirms that the open-source server can run on owned infrastructure. There is no
-required cloud account or paid service in this fixture; hosting/bandwidth are not free.
+[LiveKit](https://github.com/livekit/livekit) is an Apache-2.0 candidate with
+[self-hosting support](https://docs.livekit.io/transport/self-hosting/).
+A local fake-device experiment established two-client media/screen transport,
+signature rejection, and room retirement with automatic creation disabled.
+That unused fixture and its SDK dependencies were removed from the document
+codebase; it was never a Flux call feature or real-device acceptance.
 
-`npm run test:livekit` runs unmodified LiveKit **1.13.9** with client **2.22.4**
-and server SDK **2.19.1** in a disposable Docker network. Server/browser images
-are pinned by digest. It publishes no host ports, uses generated private keys,
-mounts no Docker socket or host media devices into the browser, and removes only
-its randomly named containers/network. Evidence stays in private `/tmp/opencode`
-storage; keys and tokens are never committed.
+Before integration:
 
-Verified locally:
+- Bind grants to verified sessions, current workspace membership, exact room
+  epochs, and unique participant sessions. Use minimal publish permissions.
+- Serialize creation/retirement and token issuance in durable application state.
+  Logout, reset, expiry, and offboarding must disconnect participants and prevent
+  cached-token rejoin. Short token expiry alone is insufficient.
+- Reconcile server failures, bound quotas, fail closed on authorization errors,
+  and keep room names/tokens out of logs.
+- Provide explicit join/leave and device controls; recording is off by default.
+- Test real devices, HTTPS/WSS, external ICE/TURN, firewalls, browser support,
+  privacy, and capacity. Keep calls isolated from document persistence.
 
-- Two independently tokened browser contexts join an explicitly created room.
-- Both receive microphone/camera RTP bytes from the other, using fake input devices.
-- Browser-native screen capture publishes and the other client receives its packets.
-  This is automated Chromium capture, not real hardware/user-picker coverage.
-- An invalid signing secret cannot join.
-- With automatic room creation disabled, deleting the old room disconnects both
-  participants. An **unexpired** old-room token cannot recreate it; a newly
-  authorized identity joins the explicitly created next-epoch room.
+## Office editing
 
-This is **not a Flux call feature**: there are no workspace call controls,
-application token endpoints, call membership records, moderation, or deployment
-media ports. The prototype establishes a possible revocation primitive, not a
-complete authorization protocol. Before integrating:
+Neither candidate is approved:
 
-1. Bind grants to current verified sessions/workspace membership, exact room
-   epoch, and unique participant-session identities; use minimal publish grants.
-2. Serialize room creation/retirement and token issuance under durable application
-   state. Disable automatic creation; never recreate retired epochs. Offboarding,
-   logout/password reset, and expiry must disconnect relevant participants and
-   prevent rejoining with cached tokens. Short token TTL alone is insufficient.
-3. Reconcile server API failures/restarts, bound room/participant quotas, and fail
-   closed when authorization cannot be checked. Do not leak room names or tokens
-   in logs. Add independent-account and tenant/revocation acceptance tests.
-4. Provide opt-in microphone/camera/screen controls, clear join/leave/error states,
-   accessible layouts, device cleanup, and reconnect behavior. No recording by default.
-5. Validate HTTPS/WSS, UDP/TCP ICE/TURN across real networks and firewalls, target
-   resource usage, mobile/Safari/Firefox, privacy disclosures, and image scans.
-   Do not assume the current web gateway's 80/443-only firewall is sufficient.
-6. Keep calls optional and isolated from document persistence/merge correctness.
+- **Univer:** its [collaboration](https://docs.univer.ai/guides/sheets/features/collaboration)
+  and [server license](https://docs.univer.ai/server/license) guides describe
+  licensed features. An open-source core does not establish a perpetual free
+  license for the required collaboration/import-export/server functionality.
+- **ONLYOFFICE Community:** the [edition comparison](https://www.onlyoffice.com/compare-editions.aspx)
+  lists a free AGPLv3 edition. The [DocumentServer license](https://github.com/ONLYOFFICE/DocumentServer/blob/master/LICENSE)
+  includes attribution/legal-notice/trademark and non-code CC BY-SA terms.
+  Source-offer, combined-work, distribution, and UI obligations need review for
+  Flux's intended packaging. No permission to publish source or change branding
+  follows from the edition label alone.
 
-Local evidence: `/tmp/opencode/flux-livekit-s7od6cyp/evidence.json`;
-that path is machine-local supporting evidence, not a portable release dependency.
-
-## Office: not approved under the current constraints
-
-### Univer
-
-The [collaboration guide](https://docs.univer.ai/guides/sheets/features/collaboration)
-and [server license guide](https://docs.univer.ai/server/license) describe licensed
-collaborative features and browser license configuration. An open-source core is
-not evidence that the required collaboration/import-export/server features have
-a perpetual free license covering Flux. No qualifying license was obtained.
-**Do not select paid/pro packages or assume trial access meets the free requirement.**
-
-### ONLYOFFICE Community
-
-The [edition comparison](https://www.onlyoffice.com/compare-editions.aspx) lists
-Community as free under AGPLv3 and recommends up to 20 users; Enterprise and
-Developer are commercial editions. The current
-[DocumentServer license](https://github.com/ONLYOFFICE/DocumentServer/blob/master/LICENSE)
-adds attribution/legal-notice/trademark and non-code CC BY-SA terms. Review the
-license of the exact chosen release and its components, not just the main-branch label.
-
-AGPL is not a blanket prohibition on private software, nor automatic permission
-for every proposed integration. The scope of source-offer, combined-work,
-distribution, and UI-notice obligations must be established for Flux's intended
-packaging/hosting. No legal suitability conclusion or permission to publish Flux
-source/change branding has been inferred. No commercial edition is authorized.
-
-No Office service was added to the Docker kit and no spreadsheet/presentation
-co-editing, callback security, restart persistence, import/export fidelity, or
-snapshot prototype has passed. See [the evaluation checklist](office-evaluation.md).
-Consider other genuinely self-hostable/free candidates in a separate review;
-do not present an untested alternative as an approved replacement.
+Selection requires a suitable license, two-account spreadsheet/presentation
+co-editing, workspace authorization, authenticated replay-resistant save callbacks,
+restart persistence, private file snapshots, representative XLSX/PPTX round-trips,
+and measured host capacity. Trials or commercial editions do not meet the current
+free/self-hosted requirement. No Office service or accepted prototype exists;
+semantic merging and perfect format fidelity are not promised.

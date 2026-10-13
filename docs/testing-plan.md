@@ -1,301 +1,119 @@
-# Testing plan
+# Testing
 
-## Automated now
+## Commands
 
-Current verification (2026-10-12): 93 unit tests, 43 Chromium acceptance tests, and 42 Firefox
-acceptance tests pass (one unsupported Firefox touch-emulation test is skipped), along
-with type checks and the production build. Dependency audit reports no known
-vulnerabilities. The expanded frozen-source Docker/HTTPS/SMTP/backup/restore
-exercise also passes. These checks do not replace release security/load testing
-or operator launch approval.
+Run builds before browser tests: rebuilding shared packages can restart the API
+watcher and interrupt requests. Use development infrastructure only; fixtures
+delete their own accounts, workspaces, and snapshot keys.
 
-`npm test`: role separation, stable room/color utilities, versioned salted scrypt,
-legacy password compatibility, bounded password-check capacity and queue recovery,
-token hashing, safe internal redirects, CRDT convergence and deletion recovery.
-History units cover schema validation/round-trips, block-ID uniqueness, checksums,
-snapshot limits, conditional object creation, FIFO barriers, and room generations.
-Navigation units cover trimmed/case-insensitive search, natural name sorting,
-recent-edit ordering, empty results, and preserving the source list.
-Recovery units cover transient-versus-denied classification, bounded retries,
-IndexedDB account/document/generation separation, quota refusal without eviction,
-ordered writes, stale acknowledgements, unavailable storage, and logout fencing.
-Credential preflight units reject invalid invitations/expired or wrong-purpose
-account links before password hashing, then revalidate consumption under the user lock.
-Mail units cover permanent/temporary failure classification, capped backoff,
-row-locked and audited resend limits, payload erasure, and HTTPS alert configuration.
-Merge units cover independent blocks, main-only preservation, edit/edit and
-edit/delete decisions, structural review, insertion/movement ordering, unknown
-or inherited resolutions, limits, and empty-result rejection. Incremental-update
-tests keep main unchanged during preparation, preserve unaffected item identities,
-converge connected replicas, and retain offline changes to an unaffected block.
-Decision units cover role/input limits, nested identity inspection, copied-ID
-recreation, generation fencing, and unchanged archived experiment anchors.
-The production release runs `tests/release/check-document-model.cjs` across the
-compiled API's CommonJS/ESM boundary, ensuring checkpoint decoding and Yjs
-constructor-sensitive inspection remain inside one shared module.
+| Command | Coverage | Requires |
+|---|---|---|
+| `npm run typecheck` | All packages, services, and TypeScript tests | Installed dependencies |
+| `npm test` | Permissions, credentials, document state, merges, recovery, and demo data | Installed dependencies |
+| `npm run build` | Production compilation | Installed dependencies |
+| `npm audit --audit-level=high` | Known dependency advisories | Registry access |
+| `npm run test:showcase` | Chromium/Firefox read-only walkthrough | Installed browser binaries |
+| `FLUX_TEST_FIREFOX=true npm run test:e2e` | Full-app Chromium/Firefox acceptance | Migrated development database, storage, and browser binaries |
+| `npm run test:private` | Private host tooling and Compose safeguards | Python and Docker Compose |
+| `npm run test:release` | Full production-mode HTTPS/SMTP/backup/restore exercise | Docker and OpenSSL; free ports 9443/8028 |
+| `npm run test:release:private` | Same exercise through the private overlay | Same as the full release |
+| `npm run test:release:showcase` | Frontend-only production showcase | Docker; free port 9444 |
 
-`npm run test:e2e`: account/workspace/document UI flow; three separate accounts
-co-editing different blocks; presence; reconnection and refresh recovery;
-cross-workspace denial; email-bound single-use invitations; CSRF rejection;
-viewer REST rejection; direct malicious Yjs write rejection; active revocation;
-acknowledged-state recovery after an isolated collaboration server is killed and restarted;
-mobile editor overflow checks.
+Release exercises use frozen source, unique image tags, random project names,
+disposable secrets, and local test certificates. They remove only their own
+containers and volumes. Artifacts remain under `/tmp/opencode`; failed CI runs
+upload diagnostics, not environment files or database archives. Update the pinned
+Playwright image/version/digest in both runners with `@playwright/test`.
 
-History browser tests cover named capture, read-only formatted previews,
-append-only restore with preserved later content, pagination, stale-head rejection,
-idempotency, simultaneous restore attempts, private objects and conditional PUT,
-cross-workspace denial, service-token audience checks, unsupported schemas,
-corrupt snapshots, and manual recovery of unacknowledged/offline drafts after
-restoration.
-Experiment browser tests cover isolated main/source edits, UI approval/confirmation,
-exact stored-result preview despite later UI choices, connected-main publication,
-stale heads, superseded and offboarded reviewers, concurrent finalization, retry
-identity, corrupt base/result refusal, and download-only archived offline drafts.
-Native keyboard paragraph splitting is checked on a narrow, wrapped experiment:
-the existing block keeps its ID and exact content, the new paragraph receives a
-different ID, and its addition combines with a main-only edit without a conflict.
-Discussion tests cover two independent accounts, reopen/status persistence,
-read-only highlighted checkpoint context, mobile/night/reduced-motion layout,
-lost send responses, concurrent retry/sends/moderation, message/bookmark pagination,
-older linked messages, tenant/role boundaries, literal untrusted text, revocation,
-copy-ID recreation, main restore versus unchanged archived source, invalid saved
-CRDT context, and branch/workspace limits. Quota fixtures seed bounded records or
-counters only in their tracked test workspace; these are not capacity measurements.
-Browser recovery tests additionally cover initial file and token outages, manual
-retry with offline edits intact, actual denial without retries, closing/reopening
-an offline tab with explicit read-only review/resume, download-only old-generation
-drafts after restore, storage failures with download fallback, and cross-tab logout
-cleanup. The review dialog is checked at 320px in night/reduced-motion mode.
+## What the tests protect
 
-Browser test fixtures delete only their own tracked database IDs and snapshot keys.
-Session-loading regressions cover stalled account checks with timeout/retry,
-login while an older check is pending, and recovery when browser chunks fail to
-load.
+### Identity and permissions
 
-Interface regressions cover system-aware day/night themes, persistence and
-cross-tab synchronization, keyboard toggling, reduced motion and browser fallback,
-hydration errors, password visibility, interactive document previews, search/sort,
-list/grid switching, team collapse, quick-open focus/Escape/Enter, and preventing
-nested dialogs. Desktop, tablet, and 320px mobile layouts are checked for overflow
-and captured for visual review. Word counts handle separate blocks; wide-page
-and theme controls are verified not to change document content or its history head.
-The reference-led entry has no-WebGL poster coverage, narrow-tablet/mobile
-overflow checks, optional WebGL keyboard rotation, idle-render-loop assertions,
-reduced-motion switching, and simulated context-loss fallback. Mobile navigation
-checks disclosure, Escape, and returning focus to its trigger. The sculpture test
-is skipped on browsers that cannot create WebGL2; poster checks still run.
-Additional coverage checks functional color regions, stable document accent
-colors through sorting, hover/keyboard SVG changes, reduced-motion static
-graphics, touch-first document opening, onboarding creation, and graphic-mode
-changes in the entry scene. Decorative interactions are verified not to mutate
-document names or history heads.
-The app-wide illustration family is checked in default-grid/main navigation,
-creation/invitation/search dialogs, empty search states, editor/checkpoint actions,
-history previews, and the email-bound invitation joining flow. Focus and mobile
-dialog layouts are preserved, graphics are absent from authored document content,
-and canceling the illustrated restore dialog leaves the history head unchanged.
+Unit and browser checks cover salted password hashes, bounded password work,
+credential preflights, single-use email-bound invitations, verified production
+accounts, password-reset races, CSRF, tenant separation, viewer write rejection,
+and active session/member revocation. Malicious Yjs writes are rejected by the
+collaboration server, not just hidden in the interface.
 
-## Before the next milestone is declared reliable
+SMTP release checks exercise authenticated TLS delivery, permanent quarantine,
+temporary retry, expiry erasure, redacted HTTPS alerts, bounded operator resend,
+audit events, and readiness recovery. They do not establish real inbox delivery.
 
-- Longer-running rapid editing across three independent browser accounts.
-- Graceful service-restart coverage and repeated abrupt-restart stress tests.
-- Temporary database unavailability: no false Saved indicator.
-- Read-only accounts cannot mutate initial state through sync handshakes.
-- Duplicate invitation acceptance and expired invitations.
-- Logout revokes an already-open document connection.
-- Formatting, tables, deletes, paste, split blocks, undo/redo, and duplicate IDs.
-- Broader mobile-device, keyboard, native-dialog, and reduced-motion coverage;
-   current automated browser coverage is Chromium/Firefox, not Safari/WebKit or
-  native mobile devices.
+### Documents and recovery
 
-## Merge acceptance and remaining stress coverage
+Checks cover schema round-trips, unique block IDs, checksums, private conditional
+snapshot creation, ordered flush barriers, three-account editing, eight-client
+release convergence, reconnect/refresh, and acknowledged-state recovery after a
+collaboration process restart.
 
-- Non-conflicting changes on separate blocks combine.
-- Conflicting edits and edit/delete cases block until resolved.
-- Source or target changes invalidate approval.
-- Main edits arriving during finalization do not disappear.
-- Simultaneous merge attempts cannot both commit against the same head.
-- Restore creates a revision; historical selection never modifies main.
-- Deleted decision anchors remain visibly unavailable.
+History coverage includes formatted read-only previews, append-only restore,
+stale-head rejection, idempotency, concurrent restores, corrupted/unsupported
+snapshot refusal, and retired room generations. Browser drafts require explicit
+review; old-generation copies are download-only. Quota/storage failures do not
+silently evict drafts. Tests also cover transient outages, stale acknowledgements,
+account separation, cross-tab logout, and stalled account checks.
 
-The checks above have unit/browser coverage; sustained editing during deliberately
-slow finalization, repeated process failure at each commit/publication boundary,
-broader mixed-format documents, and target capacity still require separate stress
-evidence. Existing incremental-update tests preserve offline edits only to an
-unaffected block; they do not guarantee user intent for same-block offline changes.
+### Experiments and decisions
 
-## Deployment acceptance
+Merge tests cover independent changes, main-only preservation, edit/edit and
+edit/delete conflicts, structural/order choices, exact-head non-author approval,
+offboarding supersession, concurrent/idempotent finalization, connected-main
+publication, and read-only archived experiments. Incremental updates preserve
+offline edits to unaffected blocks, not intent for competing same-block edits.
+Paragraph-splitting fixtures explicitly assert the native caret position before
+pressing Enter and verify exact text and stable IDs; mutations are not retried to
+hide incorrect edits. Text assertions exclude decorative caret labels only.
 
-Verified identity, HTTPS/WSS, private storage, secret rotation, session revocation,
-backup restore, measured small-team load, error monitoring, and documented
-retention/import-export limitations. Do not claim large-scale capacity unmeasured.
+Discussion tests cover persistent sends, lost-response retries, moderation,
+pagination, older linked messages, quotas, role boundaries, untrusted literal
+text, revocation, and status races. Decision anchors retain original checkpoint
+context and never silently reattach to a copied ID or restored generation.
 
-`npm run test:release` creates a fresh production-mode Docker stack with local
-HTTPS and a TLS-authenticated SMTP sink. Browser checks cover invite-only access,
-email ownership, scanner-safe fragments, password-reset races and session revocation,
-secure cookies, CSP, viewer roles, eight real concurrent WebSocket editors, durable
-saving, checkpoints, explicit browser-draft recovery under production CSP,
-independent verified review, live merging with retained main-only content,
-archived discussion and Decision Bookmark previews,
-API payload limits, and credential throttling. It also checks
-the production singleton lease, makes an encrypted cold backup, restores into a
-fresh project, verifies shared/recovered-draft hashes, merge checkpoints, discussion,
-decision state, superseded active approvals, and generation fencing, and rejects
-a second restore over existing data. See `docs/production.md`
-for real domain/SMTP/monitoring/target-hardware gates this test does not cover.
+### Interface and showcase
 
-The complete local release exercise passed twice consecutively on 2026-10-11,
-including restored document/hash/checkpoint validation and populated-target refusal.
-The expanded exercise passed on 2026-10-12, including SMTP quarantine/resend/alerts,
-legacy mail expiry refusal, explicit browser-draft recovery under HTTPS/CSP,
-restored shared and recovered-draft content hashes, and populated-target refusal.
-The document-MVP expansion passed on 2026-10-12: compiled CommonJS/ESM identity
-inspection, independent verified approval, incremental live-main merge, preserved
-main/source checkpoints, archived experiment discussion/Decision Bookmark context,
-and restored content/decisions with active approvals superseded and payloads erased.
-Machine-local evidence: `/tmp/opencode/flux-release-awpcgzig/`; browser regression
-log: `/tmp/opencode/flux-mvp-final-browser.log` (83 passed, one skipped).
-The release's local TLS/SMTP/restore fixtures are supporting evidence only, not
-real inbox delivery, external media networking, or target-host capacity approval.
-Every application image and test script uses one frozen source snapshot and a
-per-run image tag.
-The mail acceptance fixture also exercises real TLS SMTP 550 quarantine, a
-redacted HTTPS alert, missing-confirmation refusal, explicit resend and audit,
-451 retry, expired-payload erasure, and readiness recovery after acknowledgement.
-The release browser runs in a pinned Playwright container on the test network to
-isolate it from host network changes; update its image/version/digest alongside
-`@playwright/test`. Failed runs preserve network errors, screenshots, service logs,
-container health/exit state, visible block IDs/text, and the captured merge
-comparison before cleanup. Only disposable-fixture diagnostics,
-not environment files or database archives, are uploaded by CI. TLS certificates
-and SMTP delivery are local test fixtures, not public-domain or real-inbox validation.
+Browser checks cover day/night persistence, cross-tab themes, keyboard navigation,
+dialog focus, quick open, search/sort, responsive overflow, reduced motion, and
+WebGL/poster fallbacks. Decorative effects must not mutate authored content.
 
-Remote run `38302974522` passed unit/browser/type/build/audit checks but rejected
-the release merge fixture with an `EDIT_EDIT` conflict. Captured screenshots showed
-the experiment conclusion inside the original paragraph rather than a separate
-addition. The release fixture now explicitly places the native browser selection
-at the intended paragraph end, waits for the saved baseline, asserts the split
-before typing, and verifies exact unchanged baseline content in the source
-checkpoint. Conflict rules and the empty-conflict assertion remain unchanged;
-mutations are not retried to hide an incorrect edit.
-Exact browser text checks strip only decorative collaboration-caret widgets from
-a detached DOM clone; teammate names are not authored paragraph content. The live
-editor and checkpoint payloads are not modified by these assertions.
-The targeted branch suite then passed all 10 checks (five Chromium and five
-Firefox) on 2026-10-12; type checks, all 93 units, and the zero-vulnerability
-dependency audit also passed. Browser checks run after package builds finish:
-building shared packages while reusing the development server can restart its
-API watcher mid-request, which caused one diagnosed local signup refusal before
-the stable full targeted run. Evidence:
-`/tmp/opencode/flux-ci-fixture-branches-stable.log`.
-The revised complete Docker release exercise passed on 2026-10-12, including
-eight-client convergence, exact baseline preservation, reviewed merging,
-archived discussion/decision context, singleton fencing, encrypted restoration,
-and populated-target refusal. Evidence: `/tmp/opencode/flux-release-841mh729/`
-and `/tmp/opencode/flux-ci-fixture-release-final.log`.
-The complete local browser suite also passed: 85 checks (43 Chromium and 42
-Firefox), with the same unsupported Firefox touch-emulation skip. Evidence:
-`/tmp/opencode/flux-ci-fixture-all-browsers.log`.
-Remote run `38307799354` subsequently caught the same selection assumption in
-the new narrow paragraph-splitting regression: `Enter` split at the clicked
-position rather than the expected paragraph end. That regression now establishes
-and asserts the native caret precondition explicitly before sending `Enter`;
-exact content, block identity, and empty-conflict checks remain unchanged. It
-does not test or claim reliability of immediate click/Ctrl+End sequencing.
-The explicit-caret regression passed six fresh fixtures per browser (12 checks,
-no failure retries), and type checks passed. Evidence:
-`/tmp/opencode/flux-ci-caret-repeated.log`.
+Showcase checks walk through all five sample views without API/sync requests,
+editable fields, or accounts. They include keyboard skip links, 320px layouts,
+theme persistence, and readable content without JavaScript. Its release exercise
+requires a frontend-only stack, hostname-verified test TLS, production CSP,
+rejected write methods, and denied account/API/document routes. Browser TLS
+exceptions are limited to the disposable fixture; normal remote checks validate
+certificates.
 
-### Personal private-access checks
+### Deployment and recovery
 
-`npm run test:private` checks private-only port/origin resolution, preserved
-verified/invite-only authentication, independently generated protected secrets,
-Docker context/environment isolation, startup image preflight, serialized writer
-jobs, stalled-operation alerts, replica loss/collision refusal, backup-age/disk
-health, redacted HTTPS notifications, and preservation of unrelated user units.
-Timer templates are also checked with `systemd-analyze --user verify` without
-installing or enabling them on the operator's machine.
+The full release exercises secure cookies, CSP, resource/payload limits, the
+collaboration singleton lease, encrypted cold backup, empty-target restore,
+restored document/checkpoint/discussion/decision state, revoked sessions,
+superseded approvals, generation fencing, and populated-target refusal.
 
-`npm run test:release:private` runs the same frozen-source document-MVP acceptance
-through the unmodified private overlay, then exports its public CA and verifies
-HTTPS readiness with hostname/CA validation enabled. It exercises the locked host
-backup wrapper and a fresh private project's restore/populated-target refusal.
-The SMTP and browser services added by the fixture are disposable test helpers,
-not part of the private deployment. The fixture does not validate real Tailscale
-ACLs, other-device trust stores, real inbox delivery, removable/NAS storage, image
-vulnerability scanning, or installed timer execution.
+Private checks additionally cover private-only port/origin resolution, protected
+independent secrets, Docker context isolation, startup image preflight, serialized
+writer jobs, replica loss/collision refusal, backup age/disk health, notifications,
+and preservation of unrelated user units. Timer templates are verified without
+installation; the private release tests trusted-CA readiness and the locked host
+backup wrapper.
 
-Use `private-access.md` and `private-checklist.md` for limited personal acceptance;
-these checks do not complete the broader public launch record.
+## Validation record
 
-Local validation on 2026-10-13 passed 35 private-host checks, all 93 application
-units, type checks, production build, and a zero-vulnerability dependency audit.
-Generated timer templates passed systemd verification without installation.
-Both the public-kit regression and final private-overlay Docker exercise passed,
-including eight-client convergence, verified reviewed merging, archived decision
-context, singleton fencing, encrypted restore, and populated-target refusal. The
-private exercise also passed hostname-verified HTTPS with its exported public CA
-and the locked host backup wrapper. Evidence:
-`/tmp/opencode/flux-private-public-regression.log` (artifacts
-`/tmp/opencode/flux-release-of0rop3n/`) and
-`/tmp/opencode/flux-private-release-final.log` (artifacts
-`/tmp/opencode/flux-release-b74n73we/`). The operator's private configuration is
-initialized but SMTP is unconfigured; no live private stack or user timers were
-enabled. Image scanning and real-device/network/storage acceptance remain pending.
+On 2026-10-13, the cleaned codebase passed 96 units, 35 private-host checks,
+85 application browser checks (one unsupported Firefox touch-emulation skip),
+six showcase browser checks, type/build checks, and a zero-vulnerability
+dependency audit. Public-app, private-overlay, and showcase Docker exercises
+also passed after the dependency cleanup and separate web build. The documented
+`dev:showcase` command was smoke-tested on loopback without backend services.
+These results are not public deployment approval.
 
-### Public read-only showcase
+## Still manual
 
-The `/demo` walkthrough uses fictional source-controlled documents, not workspace
-data or a guest account. Unit checks validate its document schema, actual
-three-way merge result, retained main-only note, and decision anchor.
-`npm run test:showcase` checks Chromium/Firefox navigation, keyboard skip links,
-theme persistence, 320px layouts, visible server-rendered content without
-JavaScript, and absence of API/synchronization requests.
+- Real public DNS/ACME, private-network ACLs/client trust, and inbox delivery.
+- Actual phone/Safari/WebKit use and target hardware/storage capacity.
+- Image vulnerability scans, off-host backup/key custody, and installed timers.
+- Sustained editing, slow commits, and repeated failure at publication boundaries.
+- Privacy, retention, deletion/export procedures, and independent security review.
 
-`npm run test:release:showcase` runs only a web service and HTTPS gateway. It checks
-that no database/SMTP configuration reaches the web container, verifies the
-hostname against the disposable CA, requires production CSP, denies non-demo
-routes and write methods, and runs the same browser walkthrough. Browser-only TLS
-exceptions are scoped to this disposable fixture; normal remote checks retain
-certificate validation. Real public DNS/ACME, external reachability, image scans,
-and real phones still require operator checks in `showcase.md`.
-
-Final local validation on 2026-10-13 passed 96 unit tests, type checks, the
-zero-vulnerability dependency audit, 35 private-host checks, and all 85 existing
-application browser checks (one unsupported Firefox touch-emulation skip).
-The standalone walkthrough passed all six Chromium/Firefox checks, including
-keyboard skip navigation. Both final Docker exercises passed: full authenticated
-document/merge/decision acceptance with encrypted restoration, and the
-frontend-only read-only showcase with trusted test TLS and production CSP.
-Evidence: `/tmp/opencode/flux-showcase-app-regression-final.log`,
-`/tmp/opencode/flux-showcase-browser-final.log`,
-`/tmp/opencode/flux-showcase-full-release.log` (artifacts
-`/tmp/opencode/flux-release-vi8f7gea/`), and
-`/tmp/opencode/flux-showcase-release-complete.log` (artifacts
-`/tmp/opencode/flux-showcase-ka7tq3eu/`). Development preview binding is now
-loopback-only. No public host/hostname has been selected or deployed.
-
-## Optional integration fixture
-
-`npm run test:livekit` passed on 2026-10-12 using pinned unmodified LiveKit and a
-pinned Chromium container on a disposable network with no host ports. It verifies
-received microphone/camera/screen RTP packets, signature rejection, room deletion,
-and inability of an unexpired retired-room token to recreate that room when
-automatic creation is disabled. Fake microphone/camera inputs and automated
-screen capture do not establish real device support, external ICE/TURN, or Flux
-workspace/session authorization. It is not included in production Compose.
-See `integration-feasibility.md` for versions, evidence, and remaining gates.
-
-## Dependency review
-
-The failing Vite 8.3.4 PR (#9) trace from run `38164002514` showed the optional
-ribbon canvas remaining `data-motion="active"` beyond the 15-second idle assertion.
-Its interpolation advanced by a fixed fraction per frame, so software/slow graphics
-could stretch completion indefinitely. Motion now uses elapsed time and settles
-at the next available frame after 1.2 seconds, rather than weakening or retrying the assertion.
-The Vite 8.3.4 upgrade passes the current unit, type/build, audit, and Chromium/Firefox
-suites locally. Its unit-test config uses `.mts` to avoid Vite's native-config ESM
-warning. PR #9 is now closed; the separately tested Vite upgrade already on main
-is retained, rather than merging a conflicting Dependabot branch.
-Major Vite updates remain deliberate; CI verifies PRs and main pushes without
-duplicating a Dependabot branch push as a second run.
+Use [showcase acceptance](showcase.md), [personal acceptance](private-checklist.md),
+or [the full launch checklist](launch-checklist.md) for the intended deployment.

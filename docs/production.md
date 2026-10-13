@@ -242,10 +242,9 @@ independent review, live-main merging, archived discussion/decision context, and
 encrypted restore of content/checkpoints/decisions with active approvals invalidated.
 This does not satisfy the real-world launch gates above.
 
-The current scope still excludes integrated calls/Live Merge Rooms, Office editing,
-and richer anchored comments/replay. The optional LiveKit feasibility fixture is
-isolated and not included in this production stack. Office licensing is unresolved;
-see `docs/integration-feasibility.md`. Users must wait for **Saved** before closing the editor. IndexedDB
+The current scope excludes calls/Live Merge Rooms, Office editing, and richer
+anchored comments/replay. Future integration and licensing constraints are in
+`docs/integration-feasibility.md`. Users must wait for **Saved** before closing the editor. IndexedDB
 backs up unacknowledged local edits when available (8 MiB/draft, 32 MiB/account,
 64 MiB/browser, 64 records). Capacity exhaustion never silently evicts a draft;
 users get a warning and can download or discard copies. On returning, drafts require

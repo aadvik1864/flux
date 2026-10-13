@@ -38,8 +38,8 @@ function DocumentNode({ node }: { node: DocumentContent }): ReactNode {
   }
 }
 
-function Paper({ content, label }: { content: DocumentContent; label: string }) {
-  return <article className="demo-paper" aria-label={label}>
+function Paper({ content }: { content: DocumentContent }) {
+  return <article className="demo-paper" aria-label="Sample document">
     <div className="demo-paper-heading">
       <span>Garden open day</span>
       <LockKeyhole size={14} />
@@ -117,7 +117,7 @@ export function DemoPage() {
             <p>Sample review by Hana, not the experiment’s author.</p>
           </div>
         )}
-        <Paper content={content} label="Sample document" />
+        <Paper content={content} />
         <noscript><p className="demo-noscript">JavaScript is needed to switch views. You can still read this sample plan.</p></noscript>
       </section>
       <aside className="demo-context" aria-label="About this sample">

@@ -22,8 +22,7 @@ No Docker, database, account, or SMTP setup is needed for this preview:
 
 ```bash
 npm ci
-npm run build:packages
-npm run dev -w @flux/web
+npm run dev:showcase
 ```
 
 Open `http://127.0.0.1:3000/demo`. The frontend server must remain running. Other

@@ -1,5 +1,5 @@
-# Pinned Node 22 / Alpine and PostgreSQL images. Update digests deliberately in CI.
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS build
+# Pinned Node 22 / Alpine. Update digests deliberately in CI.
+FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS dependencies
 RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -12,7 +12,12 @@ COPY packages/document-model/package.json packages/document-model/package.json
 COPY packages/storage/package.json packages/storage/package.json
 RUN npm ci
 COPY . .
+
+FROM dependencies AS build
 RUN npm run db:generate && npm run build:packages && npm run build -w @flux/api && npm run build -w @flux/collaboration
+
+FROM dependencies AS web-build
+RUN npm run build -w @flux/shared && npm run build -w @flux/document-model
 # No credentials, environment file, or deployment-specific public URL enters the build.
 RUN FLUX_STANDALONE=true API_INTERNAL_URL=http://api:4000 npm run build -w @flux/web
 
@@ -48,10 +53,10 @@ CMD ["node", "dist/server.js"]
 FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS web
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000 NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
-COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./
-COPY --from=build --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=build --chown=node:node /app/apps/web/public ./apps/web/public
-COPY --from=build /app/docs/licenses ./licenses
-COPY --from=build /app/apps/web/app/fonts/OFL.txt ./licenses/fonts-OFL.txt
+COPY --from=web-build --chown=node:node /app/apps/web/.next/standalone ./
+COPY --from=web-build --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=web-build --chown=node:node /app/apps/web/public ./apps/web/public
+COPY --from=web-build /app/docs/licenses ./licenses
+COPY --from=web-build /app/apps/web/app/fonts/OFL.txt ./licenses/fonts-OFL.txt
 USER node
 CMD ["node", "apps/web/server.js"]
