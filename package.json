@@ -19,6 +19,8 @@
     "test:release": "python3 tests/release/run.py",
     "test:private": "python3 -m unittest discover -s tests/private -p 'test_*.py'",
     "test:release:private": "python3 tests/release/run.py --private",
+    "test:showcase": "npm run build:packages && playwright test -c playwright.showcase.config.ts",
+    "test:release:showcase": "python3 tests/showcase/run.py",
     "test:livekit": "python3 tests/integrations/livekit/run.py",
     "db:generate": "npm run db:generate -w @flux/api",
     "db:migrate": "npm run db:migrate -w @flux/api",

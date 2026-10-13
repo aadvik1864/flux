@@ -122,6 +122,7 @@ textarea { resize: vertical; }
 .auth-header { display: flex; align-items: center; gap: 28px; padding: 28px 36px; position: relative; z-index: 4; color: var(--slate-ink); }
 .auth-header .wordmark { font-size: 30px; }
 .auth-header-note { margin-left: auto; font-size: 13px; color: var(--muted); }
+.auth-footer nav { display: flex; flex-wrap: wrap; gap: 16px; }
 .auth-header .theme-toggle { color: var(--muted); background: var(--surface-soft); border-color: var(--line); }
 .auth-header .theme-sun, .auth-header .theme-moon { color: inherit; }
 .auth-composition { display: grid; grid-template-columns: minmax(0, 1fr) 344px; align-items: center; gap: 24px; padding: 6px 36px 18px; flex: 1; }

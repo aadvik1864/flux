@@ -26,7 +26,7 @@ os.chmod(directory, 0o700)
 source = directory / "source"
 # All images and test scripts use the same frozen source, even if a dev watcher
 # rewrites generated files or a user edits the checkout while the run is active.
-shutil.copytree(root, source, ignore=shutil.ignore_patterns("node_modules", ".git", ".next", "dist", ".env", ".env.*", "production.env", ".flux-private", "backups", "test-results", "playwright-report", "coverage", "__pycache__", "*.log", "*.tsbuildinfo"))
+shutil.copytree(root, source, ignore=shutil.ignore_patterns("node_modules", ".git", ".next", "dist", ".env", ".env.*", "production.env", "showcase.env", ".flux-private", "backups", "test-results", "playwright-report", "coverage", "__pycache__", "*.log", "*.tsbuildinfo"))
 envfile = directory / "production.env"
 config = {
     "FLUX_DOMAIN": "flux.example.com", "APP_ORIGIN": "https://flux.example.com:9443", "ACME_EMAIL": "operator@example.com",

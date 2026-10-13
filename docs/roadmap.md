@@ -57,7 +57,7 @@ silently overwrite content.
 
 Final acceptance is recorded separately in `testing-plan.md`. The document MVP
 does not include live launch, integrated calls, or the whole planned V1.
-Current local unit/browser record: 93 units, 43 Chromium and 42 Firefox checks,
+Current local unit/browser record: 96 units, 43 Chromium and 42 Firefox checks,
 with one unsupported Firefox touch-emulation test skipped; type/build/audit pass.
 The expanded frozen-source Docker/HTTPS/SMTP/merge/discussion/decision and
 encrypted-restore exercise also passes, including approval invalidation on restore.
@@ -84,6 +84,8 @@ spreadsheets/presentations and file-level snapshots; document format limitations
   notification hooks, and controlled operator resend/acknowledgement.
 - [x] Personal private-network overlay, protected configuration generation,
   preflight checks, and opt-in locked backup/maintenance/health timers.
+- [x] Account-free read-only showcase and separate frontend-only public Docker kit.
+- [ ] Public showcase host/hostname and real external HTTPS/device acceptance.
 - [ ] Real hosting/domain/SMTP identity and delivery configured by the operator.
 - [ ] External monitoring/alerts and off-host backup custody on the target host.
 - [ ] Target-host sustained load, device coverage, privacy/deletion/export procedures.

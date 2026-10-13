@@ -2,46 +2,31 @@
 
 **Shared work. Safe experiments. Decisions that stay connected.**
 
-Flux is a collaborative workspace for teams. The working flow now includes
-accounts → private workspace → invitation → shared document → durable save
-→ named checkpoint → isolated experiment → discussion → reviewed merge
-→ Decision Bookmark, with read-only history and restore-as-new-revision.
+Flux is a document workspace for shared writing, isolated experiments, and
+reviewed merges. Decisions stay connected to the discussion and checkpoint behind
+them, so the next person can understand why the document changed.
 
 ## Available now
 
-- Email/password accounts with salted scrypt hashes and database-backed sessions.
-- Private workspaces, member roles, email-bound one-use invitation links.
-- Document creation and Tiptap rich-text editing, lists, headings, and tables.
-- Yjs/Hocuspocus synchronization, collaborator presence, and live cursors.
-- PostgreSQL recovery state and a server-confirmed **Saved** indicator.
-- Read-only enforcement in the collaboration server, not only in the UI.
-- Active access rechecks; idle removed members disconnect within approximately 5 seconds.
-- Responsive workspace/editor UI, unit tests, and browser acceptance tests.
-- Persisted day/night themes, compact layouts, document search/sorting, list/grid
-  views, and keyboard quick open.
-- Reference-led slate/coral/orchid identity, self-hosted typography, and an original
-  interactive ribbon sculpture on the entry screen with a static mobile fallback.
-- Named, immutable document checkpoints in private S3-compatible object storage.
-- Paginated history with formatted, read-only checkpoint previews.
-- Explicit restore with current-head validation and automatic preservation of main.
-- Server-generated checkpoint/restore activity events and schema/checksum checks.
-- Restore-session fencing and downloadable local drafts when changes were not acknowledged.
-- Persistent browser draft backups with explicit review/resume; older restored
-  generations are download-only and never replayed automatically.
-- Bounded retry for temporary connection failures without false access denial.
-- Checkpoint-based experiments, isolated editing rooms, conservative stable-block
-  three-way comparison, explicit conflict/order choices, and non-author approval.
-- Incremental, head-validated merges into connected main; preserved main/source
-  checkpoints, archived experiments, and idempotent finalization.
-- Persistent branch-scoped discussion, lost-response send recovery, moderation,
-  and read-only archived discussions.
-- Manually created Decision Bookmarks linking an explanation, checkpoint, exact
-  block identity, and optional discussion; deleted anchors never reattach to copied IDs.
+- Collaborative rich-text documents, live cursors, and server-confirmed saves.
+- Private workspaces, roles, invitations, and verified production accounts.
+- Named checkpoints, read-only history, and restore as a new revision.
+- Isolated experiments with explicit conflict choices and independent review.
+- Persistent discussions and Decision Bookmarks tied to their original context.
+- Browser draft recovery, day/night themes, responsive layouts, and keyboard navigation.
+- An account-free, read-only public demo with fictional sample content.
 
 **Still separate milestones:** integrated calls/Live Merge Rooms, spreadsheets,
 presentations, Office import/export, richer anchored comments, and fine-grained
 replay. The isolated LiveKit feasibility fixture is not a Flux call feature.
 This remains a locally tested, invite-only document MVP, not completed V1 or live-launch approval.
+
+## Showcase
+
+Open `/demo` to explore a prepared document, experiment, reviewed merge, and
+decision without signing in. The separate public deployment needs only the web
+server and HTTPS gateway—no database, SMTP, or access to your real workspace.
+See [the showcase guide](docs/showcase.md) for preview and deployment commands.
 
 ## Local development
 
@@ -60,7 +45,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Open **http://localhost:3000**. The API and collaboration server bind to loopback.
+Open **http://localhost:3000**. Development web, API, and collaboration servers bind to loopback.
 The database is published only on `127.0.0.1:5438`.
 RustFS provides local S3 storage at `127.0.0.1:9010` with its console on port 9011.
 The checkpoint bucket is created privately on first use; browsers never receive
@@ -76,6 +61,9 @@ explicit, bounded resend commands. See the production runbook before closing or 
 
 ## Production deployment kit
 
+For a public portfolio/demo URL, use the [read-only showcase](docs/showcase.md).
+It publishes sample content while denying account, API, and live document routes.
+
 For an existing machine and a few trusted users, start with the
 [personal private-access guide](docs/private-access.md): private VPN binding,
 private-CA HTTPS, generated protected configuration, and optional backup/maintenance
@@ -88,8 +76,9 @@ and snapshot service, a same-origin HTTPS/WSS gateway, health checks, resource
 limits, a single-sync-server lease, and authenticated encrypted backup/restore.
 `npm run test:release` exercises a separate production-mode Docker stack.
 
-**Not live yet:** your domain/server, SMTP sender, external alerts, off-host
-backups, and the runbook's launch gate still need configuration and validation.
+**Not live yet:** the showcase needs a chosen public host/hostname and external
+HTTPS validation. The full app additionally needs SMTP, backups, and its launch
+checks; those are not prerequisites for the read-only showcase.
 
 ### Two-user demonstration
 
@@ -205,6 +194,8 @@ npm run typecheck
 npm test
 npm run build
 npm audit
+npm run test:private
+npm run test:showcase
 ```
 
 Browser tests require a running migrated database and private S3 storage
@@ -236,6 +227,7 @@ packages/document-model/ Versioned editor schema and content/Yjs adapters
 packages/storage/     Private S3 snapshot adapter and integrity envelope
 tests/unit/           Permissions, credentials, Yjs/schema/storage primitives
 tests/e2e/            Browser collaboration, history, and authorization checks
+tests/showcase/       Account-free walkthrough and frontend-only Docker acceptance
 tests/integrations/   Optional isolated LiveKit feasibility fixture
 docs/                 Architecture, requirements, roadmap, testing, Office evaluation
 ```

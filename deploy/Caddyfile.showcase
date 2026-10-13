@@ -1,0 +1,37 @@
+{
+  email {$ACME_EMAIL}
+  admin off
+  servers {
+    timeouts {
+      read_header 10s
+      read_body 15s
+      idle 2m
+    }
+  }
+}
+{$FLUX_DOMAIN} {
+  encode zstd gzip
+  header {
+    Strict-Transport-Security "max-age=31536000"
+    Referrer-Policy "no-referrer"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    -Server
+  }
+  request_body {
+    max_size 16KB
+  }
+  @write not method GET HEAD
+  @home path /
+  @demo path /demo /demo/ /_next/static/* /art/* /icon.svg
+  route {
+    header @write Allow "GET, HEAD"
+    respond @write 405
+    redir @home /demo 308
+    reverse_proxy @demo web:3000 {
+      header_up -Cookie
+      header_down -Set-Cookie
+    }
+    respond 404
+  }
+}

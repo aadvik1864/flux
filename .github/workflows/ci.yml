@@ -43,3 +43,21 @@ jobs:
       - name: Stop local test infrastructure
         if: always()
         run: docker compose down
+  showcase:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22.22.3", cache: npm }
+      - run: npm ci
+      - run: mkdir -p /tmp/opencode
+      - run: npm run test:release:showcase
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: showcase-failures
+          path: |
+            /tmp/opencode/flux-showcase-*/test-results/
+            /tmp/opencode/flux-showcase-*/services.log
+          retention-days: 7

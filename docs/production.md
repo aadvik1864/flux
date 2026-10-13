@@ -1,5 +1,8 @@
 # Invite-only production deployment
 
+For a public demonstration without accounts or real data, use `docs/showcase.md`.
+Its standalone Compose file runs only the web preview and HTTPS gateway.
+
 For a personal project on an existing machine, use `docs/private-access.md` instead
 of publishing this public-host configuration. It overlays the same application
 protections with private-IP-only HTTPS and small host jobs. Do not start this base

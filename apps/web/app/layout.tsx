@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import localFont from "next/font/local";
 import { headers } from "next/headers";
-import { SessionProvider } from "../components/session";
+import { SessionBoundary } from "../components/session-boundary";
 import { ColorThemeProvider } from "../components/theme";
 import "./globals.css";
 
@@ -16,5 +16,13 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const nonce = (await headers()).get("x-nonce") ?? undefined;
-  return <html lang="en" className={`${sora.variable} ${sourceSans.variable}`} suppressHydrationWarning><body><ColorThemeProvider nonce={nonce}><SessionProvider>{children}</SessionProvider></ColorThemeProvider></body></html>;
+  return (
+    <html lang="en" className={`${sora.variable} ${sourceSans.variable}`} suppressHydrationWarning>
+      <body>
+        <ColorThemeProvider nonce={nonce}>
+          <SessionBoundary>{children}</SessionBoundary>
+        </ColorThemeProvider>
+      </body>
+    </html>
+  );
 }

@@ -243,6 +243,38 @@ and the locked host backup wrapper. Evidence:
 initialized but SMTP is unconfigured; no live private stack or user timers were
 enabled. Image scanning and real-device/network/storage acceptance remain pending.
 
+### Public read-only showcase
+
+The `/demo` walkthrough uses fictional source-controlled documents, not workspace
+data or a guest account. Unit checks validate its document schema, actual
+three-way merge result, retained main-only note, and decision anchor.
+`npm run test:showcase` checks Chromium/Firefox navigation, keyboard skip links,
+theme persistence, 320px layouts, visible server-rendered content without
+JavaScript, and absence of API/synchronization requests.
+
+`npm run test:release:showcase` runs only a web service and HTTPS gateway. It checks
+that no database/SMTP configuration reaches the web container, verifies the
+hostname against the disposable CA, requires production CSP, denies non-demo
+routes and write methods, and runs the same browser walkthrough. Browser-only TLS
+exceptions are scoped to this disposable fixture; normal remote checks retain
+certificate validation. Real public DNS/ACME, external reachability, image scans,
+and real phones still require operator checks in `showcase.md`.
+
+Final local validation on 2026-10-13 passed 96 unit tests, type checks, the
+zero-vulnerability dependency audit, 35 private-host checks, and all 85 existing
+application browser checks (one unsupported Firefox touch-emulation skip).
+The standalone walkthrough passed all six Chromium/Firefox checks, including
+keyboard skip navigation. Both final Docker exercises passed: full authenticated
+document/merge/decision acceptance with encrypted restoration, and the
+frontend-only read-only showcase with trusted test TLS and production CSP.
+Evidence: `/tmp/opencode/flux-showcase-app-regression-final.log`,
+`/tmp/opencode/flux-showcase-browser-final.log`,
+`/tmp/opencode/flux-showcase-full-release.log` (artifacts
+`/tmp/opencode/flux-release-vi8f7gea/`), and
+`/tmp/opencode/flux-showcase-release-complete.log` (artifacts
+`/tmp/opencode/flux-showcase-ka7tq3eu/`). Development preview binding is now
+loopback-only. No public host/hostname has been selected or deployed.
+
 ## Optional integration fixture
 
 `npm run test:livekit` passed on 2026-10-12 using pinned unmodified LiveKit and a

@@ -6,6 +6,7 @@ node_modules
 .env
 .env.*
 deploy/production.env
+deploy/showcase.env
 test-results
 playwright-report
 coverage
