@@ -31,7 +31,7 @@ jobs:
         env: { FLUX_TEST_FIREFOX: "true" }
       - run: npm run test:release
       - run: npm run test:release:private
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: browser-failures
@@ -53,7 +53,7 @@ jobs:
       - run: npm ci
       - run: mkdir -p /tmp/opencode
       - run: npm run test:release:showcase
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: showcase-failures
