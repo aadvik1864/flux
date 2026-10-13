@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: "22.22.3", cache: npm }
       - run: npm ci
       - name: Configure isolated development tests
@@ -48,7 +48,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: "22.22.3", cache: npm }
       - run: npm ci
       - run: mkdir -p /tmp/opencode
