@@ -84,13 +84,13 @@ describe("showcase deployment boundary", () => {
     expect(proxy(request("/login")).headers.get("content-security-policy")).toContain("wss://");
     const config = await deploymentConfig();
     expect(await config.rewrites!()).not.toEqual([]);
-    expect(config.images?.unoptimized).toBe(false);
+    expect(config.images).toBeUndefined();
   });
 
   it("disables API rewrites and platform image optimization in showcase builds", async () => {
     setup();
     const config = await deploymentConfig();
     expect(await config.rewrites!()).toEqual([]);
-    expect(config.images?.unoptimized).toBe(true);
+    expect(config.images).toEqual({ unoptimized: true, localPatterns: [], remotePatterns: [] });
   });
 });

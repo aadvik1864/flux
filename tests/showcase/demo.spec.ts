@@ -13,15 +13,27 @@ test("standalone deployments expose only read-only demo routes", async ({ reques
   expect(script).toBeDefined();
   expect((await request.get(script!)).status()).toBe(200);
   expect((await request.head("/demo")).status()).toBe(200);
-  for (const path of ["/login", "/account/help", "/files/example", "/api/auth/me", "/sync", "/internal/rooms", "/invite/example", "/demoevil", "/_next/image?url=https://example.com/image.png", "/_next/image?url=%2Fart%2Fflux-ribbons.webp&w=640&q=75"]) {
+  for (const path of ["/login", "/account/help", "/files/example", "/api/auth/me", "/sync", "/internal/rooms", "/invite/example", "/demoevil"]) {
     expect((await request.get(path)).status(), path).toBe(404);
   }
+  const imagePaths = ["/_next/image?url=https://example.com/image.png&w=640&q=75", "/_next/image?url=%2Fart%2Fflux-ribbons.webp&w=640&q=75"];
+  for (const path of imagePaths) {
+    const response = await request.get(path);
+    // Vercel handles its native optimizer before application routing. Empty
+    // image allowlists must reject even valid, previously cached local assets.
+    const native = response.headers()["x-vercel-error"] === "INVALID_IMAGE_OPTIMIZE_REQUEST";
+    expect(response.status(), path).toBe(native ? 400 : 404);
+  }
   for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
-    for (const path of ["/demo", "/api/auth/register", script!, "/art/flux-ribbons.webp", "/icon.svg", "/_next/image?url=%2Fart%2Fflux-ribbons.webp&w=640&q=75"]) {
+    for (const path of ["/demo", "/api/auth/register", script!, "/art/flux-ribbons.webp", "/icon.svg"]) {
       const response = await request.fetch(path, { method });
       expect(response.status(), `${method} ${path}`).toBe(405);
       expect(response.headers().allow).toBe("GET, HEAD");
     }
+    const image = await request.fetch(imagePaths[1], { method });
+    expect(image.status()).toBe(405);
+    if (image.headers().allow) expect(image.headers().allow).toBe("GET, HEAD");
+    else expect(image.headers()["x-vercel-error"]).toBe("INVALID_REQUEST_METHOD");
   }
 });
 

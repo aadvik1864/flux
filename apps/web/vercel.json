@@ -3,18 +3,5 @@
   "framework": "nextjs",
   "installCommand": "cd ../.. && npm ci --include=dev --workspaces --include-workspace-root",
   "buildCommand": "cd ../.. && npm run build -w @flux/shared && npm run build -w @flux/document-model && npm run build -w @flux/web",
-  "routes": [
-    {
-      "src": "^/_next/image/?$",
-      "methods": ["GET", "HEAD"],
-      "status": 404,
-      "headers": { "Cache-Control": "no-store" }
-    },
-    {
-      "src": "^/_next/image/?$",
-      "status": 405,
-      "headers": { "Allow": "GET, HEAD", "Cache-Control": "no-store" }
-    }
-  ],
   "public": false
 }

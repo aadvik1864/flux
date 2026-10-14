@@ -8,7 +8,7 @@ const config: NextConfig = {
   poweredByHeader: false,
   output: process.env.FLUX_STANDALONE === "true" ? "standalone" : undefined,
   outputFileTracingRoot: resolve(__dirname, "../.."),
-  images: { unoptimized: showcase },
+  images: showcase ? { unoptimized: true, localPatterns: [], remotePatterns: [] } : undefined,
   async rewrites() {
     if (showcase) return [];
     return [{

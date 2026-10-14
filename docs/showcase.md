@@ -45,9 +45,12 @@ Import the private repository into a **new** Vercel project with:
 Vercel, the application automatically enforces the read-only allowlist, strips
 account credentials, and disables API rewrites. Deployment source/logs stay
 private (`public: false`); the public demo does not make GitHub public.
-Image optimization is disabled in showcase builds, and Vercel routing explicitly
-blocks its native optimizer before platform handling. The illustrations are
-already WebP assets.
+Image optimization is disabled and both image-source allowlists are empty in
+showcase builds; the illustrations are already WebP assets. Vercel handles its
+native optimizer before application routing and ignores `unoptimized` in the
+current adapter, so empty allowlists also deny valid local-image requests. That
+platform endpoint returns 400 (`INVALID_IMAGE_OPTIMIZE_REQUEST`) rather than the
+app's 404, and write methods receive Vercel's 405 without an `Allow` header.
 Do not copy `.env` or `.flux-private` into project environment settings.
 `.vercelignore` excludes secrets, local configuration, backups, and build/test
 artifacts from CLI uploads.
