@@ -9,12 +9,15 @@ test("standalone deployments expose only read-only demo routes", async ({ reques
   expect(demo.status()).toBe(200);
   expect(demo.headers()["content-security-policy"]).toContain("strict-dynamic");
   expect(demo.headers()["set-cookie"]).toBeUndefined();
+  const script = (await demo.text()).match(/src="(\/_next\/static\/[^"]+)"/)?.[1];
+  expect(script).toBeDefined();
+  expect((await request.get(script!)).status()).toBe(200);
   expect((await request.head("/demo")).status()).toBe(200);
-  for (const path of ["/login", "/account/help", "/files/example", "/api/auth/me", "/sync", "/internal/rooms", "/invite/example", "/demoevil", "/_next/image?url=https://example.com/image.png"]) {
+  for (const path of ["/login", "/account/help", "/files/example", "/api/auth/me", "/sync", "/internal/rooms", "/invite/example", "/demoevil", "/_next/image?url=https://example.com/image.png", "/_next/image?url=%2Fart%2Fflux-ribbons.webp&w=640&q=75"]) {
     expect((await request.get(path)).status(), path).toBe(404);
   }
-  for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
-    for (const path of ["/demo", "/api/auth/register", "/_next/static/sample.js"]) {
+  for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+    for (const path of ["/demo", "/api/auth/register", script!, "/art/flux-ribbons.webp", "/icon.svg", "/_next/image?url=%2Fart%2Fflux-ribbons.webp&w=640&q=75"]) {
       const response = await request.fetch(path, { method });
       expect(response.status(), `${method} ${path}`).toBe(405);
       expect(response.headers().allow).toBe("GET, HEAD");

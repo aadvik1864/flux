@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { isShowcaseDeployment } from "../../apps/web/lib/showcase-deployment";
 import { proxy } from "../../apps/web/proxy";
-import config from "../../apps/web/next.config";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -16,6 +15,11 @@ function request(path: string, method = "GET") {
   return new NextRequest(`https://flux.example.com${path}`, {
     method, headers: { cookie: "flux_session=sample", authorization: "Bearer sample" },
   });
+}
+
+async function deploymentConfig() {
+  vi.resetModules();
+  return (await import("../../apps/web/next.config")).default;
 }
 
 describe("showcase deployment boundary", () => {
@@ -78,11 +82,15 @@ describe("showcase deployment boundary", () => {
     expect(api.headers.get("x-middleware-request-cookie")).toBe("flux_session=sample");
     expect(api.headers.has("content-security-policy")).toBe(false);
     expect(proxy(request("/login")).headers.get("content-security-policy")).toContain("wss://");
+    const config = await deploymentConfig();
     expect(await config.rewrites!()).not.toEqual([]);
+    expect(config.images?.unoptimized).toBe(false);
   });
 
-  it("disables all API rewrites in showcase builds", async () => {
+  it("disables API rewrites and platform image optimization in showcase builds", async () => {
     setup();
+    const config = await deploymentConfig();
     expect(await config.rewrites!()).toEqual([]);
+    expect(config.images?.unoptimized).toBe(true);
   });
 });
