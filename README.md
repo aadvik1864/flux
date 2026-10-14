@@ -1,56 +1,58 @@
 # Flux
 
-**Shared work. Safe experiments. Decisions that stay connected.**
+**Write together. Try ideas. Keep your progress.**
 
-Flux is a shared place to write, try ideas, and make decisions with your team.
-Save a version of your work, explore changes in a separate copy, and review them
-before bringing them back. Keep discussions and decisions beside the document.
+Flux is a shared place to write and work with your team. Save your progress,
+try changes in a separate copy, and review them before adding them back.
+Keep your discussions and decisions beside the document.
 
-## Try Flux online
+## Try it
 
-- **[Live app](https://flux-live-tawny.vercel.app)**: open your private workspace.
-  You need an invitation and a verified email address to create an account.
-- **[Demo](https://flux-showcase-three.vercel.app/demo)**: explore a sample workspace
-  without an account. The demo is read-only, so you can look around but cannot edit.
+- **[Live app](https://flux-live-tawny.vercel.app)**: use your own private workspace.
+  You need an invitation and must confirm your email to create an account.
+- **[Demo](https://flux-showcase-three.vercel.app/demo)**: look around a sample
+  workspace. No account is needed. You can explore, but you cannot edit.
+
+Free hosting may take a little time to wake up after the app has been idle.
 
 ## What you can do
 
 - Write together and see where your teammates are working.
-- Keep documents in private workspaces and invite your team.
-- Save named versions, browse earlier work, and restore a version.
-- Try changes in a separate copy and review them before adding them back.
-- Discuss ideas and save the reasons behind a decision.
-- Recover browser drafts and switch between light and dark themes.
+- Invite people to a private workspace.
+- Save versions of a document and return to earlier work.
+- Try ideas in a separate copy before changing the main document.
+- Discuss changes and keep a record of decisions.
+- Recover browser drafts and choose a light or dark theme.
 
-Calls, Office file editing, and a detailed replay of every edit are not available yet.
+Calls, editing Office files, and replaying every edit are not available yet.
 
-## Run the demo on your computer
+## Run it on your computer
 
-The demo shows a sample garden plan, proposed changes, a review, discussions,
-and saved versions. You do not need an account or email setup to run it.
+You need Node.js and npm. Flux has been tested with Node.js 22.22.3.
 
-With Node.js 22.22.3 (tested) and npm:
+### Demo
+
+The demo uses a sample garden plan. It does not need an account, a database,
+or email setup.
 
 ```bash
 npm ci
 npm run dev:showcase
 ```
 
-Open **http://127.0.0.1:3000/demo**. The preview binds to loopback.
-For a public URL, use [Vercel or the Docker showcase kit](docs/showcase.md).
-It serves only the demo and its assets; real workspace routes stay unavailable.
+Open **http://127.0.0.1:3000/demo**. This preview is available only on your computer.
 
-## Run the full app locally
+### Full app
 
-Docker with Compose is also required. Ports 3000, 4000, 1234, 5438, 9010,
-and 9011 must be available.
+You also need Docker with Compose. Make sure ports 3000, 4000, 1234, 5438,
+9010, and 9011 are free.
 
 ```bash
 cp .env.example .env
 node -p "require('node:crypto').randomBytes(32).toString('hex')"
 ```
 
-Put the generated value in `.env` as `COLLABORATION_SECRET`, then run:
+Copy the generated value into `.env` as `COLLABORATION_SECRET`. Then run:
 
 ```bash
 npm ci
@@ -60,33 +62,32 @@ npm run db:migrate
 npm run dev
 ```
 
-Open **http://localhost:3000**. Web, API, collaboration, database, and storage
-ports bind to loopback. Local signup is open; email delivery is disabled unless
-SMTP is configured. These credentials and defaults are for development only.
+Open **http://localhost:3000**. The app and its supporting services are available
+only on your computer. Local signup is open, but email is off until you set it up.
+These settings are for local development.
 
-To try collaboration, create a workspace and invite a second email. Open the
-invitation in another browser profile, join with that email, and edit the same
-document. Wait for **Saved** before refreshing or closing it.
+To try working together, create a workspace and invite another email address.
+Open the invitation in a separate browser profile and join with that email.
+Edit the same document and wait for **Saved** before closing or refreshing it.
 
-## Deployment
+## Hosting and backups
 
-| Use | Guide |
+| What you want | Guide |
 |---|---|
-| Public read-only demonstration | [Showcase](docs/showcase.md) |
-| Personal workspace over a private network | [Private access](docs/private-access.md) |
-| Invite-only app with verified email and SMTP | [Production and recovery](docs/production.md) |
+| Share a demo that visitors can explore | [Demo hosting](docs/showcase.md) |
+| Use Flux over a private network | [Private access](docs/private-access.md) |
+| Host the full app with invitations and email | [Hosting and recovery](docs/production.md) |
 
-Both links above are online. The guides cover other ways to host Flux and keep
-backups. Before relying on Flux for important work, check your backups and make
-sure you can recover your documents. Free hosting may take a little time to wake
-up after the app has been idle.
+Before using Flux for important work, make backups and check that you can recover
+your documents.
 
-Browser drafts are unencrypted, best-effort recovery copies, not server saves.
-Restoring a document retires its old editing generation; those drafts remain
-download-only. Checkpoints are application-level immutable, not tamper-proof
-storage. See [architecture](docs/architecture.md) for the guarantees and limits.
+Browser drafts are stored without encryption and may be lost. They do not replace
+saved work. After restoring a document, older drafts can be downloaded but cannot
+be added back through draft recovery. Saved versions cannot be changed through
+the app, but they are not protected against every change to the underlying storage.
+See [how Flux works](docs/architecture.md) for more details.
 
-## Tests
+## Check your changes
 
 ```bash
 npm run typecheck
@@ -97,28 +98,28 @@ npx playwright install chromium firefox
 npm run test:showcase
 ```
 
-Full-app browser tests require the migrated local database and storage:
+Tests for the full app also need the local database and storage set up:
 
 ```bash
 FLUX_TEST_FIREFOX=true npm run test:e2e
 ```
 
-Run package builds before browser tests, not while their watch-mode services are
-running. Docker release and recovery checks are covered in the
-[testing guide](docs/testing-plan.md). Never point tests at a live database.
+Build the packages before running browser tests. Do not build them while the
+test servers are watching for changes. Run tests against local test data, never
+the live database. See the [testing guide](docs/testing-plan.md).
 
-## Codebase
+## Project folders
 
 ```text
-apps/web/                 Next.js interface and read-only demo
-apps/api/                 NestJS API, authentication, and Prisma migrations
-apps/collaboration/       Hocuspocus synchronization and durable writes
-packages/shared/          Permissions and API types
-packages/document-model/  Editor schema, Yjs adapters, and merge logic
-packages/storage/         Private S3 checkpoints and integrity checks
-deploy/                   Docker, HTTPS, and backup tooling
-tests/                    Unit, browser, and deployment acceptance
+apps/web/                 Pages, editor, and demo
+apps/api/                 Accounts, permissions, and document actions
+apps/collaboration/       Keeps shared edits in sync
+packages/shared/          Code used across the app
+packages/document-model/  Document structure and change review
+packages/storage/         Saves and checks document versions
+deploy/                   Hosting and backup tools
+tests/                    Checks for the app and hosting setup
 ```
 
-[Roadmap](docs/roadmap.md) · [API](docs/api-spec.md) ·
-[Schema](docs/database-schema.md) · [UI sources and licenses](docs/ui-sources.md)
+[Planned features](docs/roadmap.md) · [API guide](docs/api-spec.md) ·
+[Database guide](docs/database-schema.md) · [Credits and licenses](docs/ui-sources.md)
