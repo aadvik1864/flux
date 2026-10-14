@@ -8,8 +8,8 @@ before bringing them back. Keep discussions and decisions beside the document.
 
 ## Try Flux online
 
-- **[Live app](https://flux-live-tawny.vercel.app)**: the sign-in page is online.
-  Email setup is still in progress, so accounts and shared editing are not ready yet.
+- **[Live app](https://flux-live-tawny.vercel.app)**: open your private workspace.
+  You need an invitation and a verified email address to create an account.
 - **[Demo](https://flux-showcase-three.vercel.app/demo)**: explore a sample workspace
   without an account. The demo is read-only, so you can look around but cannot edit.
 
@@ -76,10 +76,10 @@ document. Wait for **Saved** before refreshing or closing it.
 | Personal workspace over a private network | [Private access](docs/private-access.md) |
 | Invite-only app with verified email and SMTP | [Production and recovery](docs/production.md) |
 
-The online demo is available at the link above. The live app is still being set up.
-The guides cover other ways to host Flux and keep backups. Before using it for
-real work, finish email setup and check that sign-in, shared editing, and recovery
-work on your host.
+Both links above are online. The guides cover other ways to host Flux and keep
+backups. Before relying on Flux for important work, check your backups and make
+sure you can recover your documents. Free hosting may take a little time to wake
+up after the app has been idle.
 
 Browser drafts are unencrypted, best-effort recovery copies, not server saves.
 Restoring a document retires its old editing generation; those drafts remain
