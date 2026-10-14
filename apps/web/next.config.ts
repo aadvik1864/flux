@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 import { resolve } from "node:path";
 
-const showcase = process.env.VERCEL === "1" || process.env.FLUX_SHOWCASE_ONLY === "true";
+const showcase = process.env.FLUX_SHOWCASE_ONLY === "true" || (process.env.VERCEL === "1" && process.env.FLUX_DEPLOYMENT_MODE !== "live");
 
 const config: NextConfig = {
   transpilePackages: ["@flux/shared", "@flux/document-model"],

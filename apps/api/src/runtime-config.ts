@@ -36,7 +36,9 @@ export function parseRuntimeConfig(environment: Record<string, unknown>) {
   }
   if (env.NODE_ENV === "production") {
     const database = new URL(env.DATABASE_URL);
-    if (!["postgresql:", "postgres:"].includes(database.protocol) || decodeURIComponent(database.password).length < 32 || /local_only|replace|example/i.test(database.password)) throw new Error("Production requires non-example PostgreSQL credentials of at least 32 characters");
+    if (!["postgresql:", "postgres:"].includes(database.protocol) || decodeURIComponent(database.password).length < (
+      database.hostname.endsWith(".neon.tech") && database.searchParams.get("sslmode") === "require" ? 16 : 32
+    ) || /local_only|replace|example/i.test(database.password)) throw new Error("Production requires non-example PostgreSQL credentials of at least 32 characters");
     if (origin.protocol !== "https:" || /localhost|\.test$/.test(origin.hostname)) throw new Error("Production requires a public HTTPS APP_ORIGIN");
     if (env.COLLABORATION_SECRET.length < 64 || /replace|example|local_only/i.test(env.COLLABORATION_SECRET)) throw new Error("Production requires a random collaboration secret of at least 64 characters");
     if (env.AUTH_MODE !== "invite-only" || !env.REQUIRE_EMAIL_VERIFICATION) throw new Error("Production requires invite-only access and email verification");

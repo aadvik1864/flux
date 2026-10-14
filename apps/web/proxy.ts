@@ -25,7 +25,13 @@ export function proxy(request: NextRequest) {
   if (passthrough || process.env.NODE_ENV !== "production") return NextResponse.next({ request: { headers } });
   const nonce = randomBytes(18).toString("base64");
   const host = new URL(process.env.APP_ORIGIN ?? request.url).host;
-  const connect = showcase ? "'self'" : `'self' wss://${host}`;
+  const collaborationOrigin = process.env.NEXT_PUBLIC_COLLABORATION_URL
+    ? new URL(process.env.NEXT_PUBLIC_COLLABORATION_URL).origin
+    : `wss://${host}`;
+  if (!showcase && process.env.NODE_ENV === "production" && !collaborationOrigin.startsWith("wss://")) {
+    throw new Error("Production collaboration requires WSS");
+  }
+  const connect = showcase ? "'self'" : `'self' ${collaborationOrigin}`;
   const csp = `default-src 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src ${connect}; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`;
   headers.set("x-nonce", nonce);
   headers.set("Content-Security-Policy", csp);

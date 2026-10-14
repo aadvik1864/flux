@@ -15,3 +15,5 @@ backups/
 .flux-private/
 __pycache__/
 .vercel/
+.vercel
+.env*

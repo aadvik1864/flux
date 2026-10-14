@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { S3Client, HeadBucketCommand, CreateBucketCommand, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { z } from "zod";
+import { put as putBlob, get as getBlob, list as listBlobs } from "@vercel/blob";
 import type { DocumentContent } from "@flux/shared";
 
 export const storageEnvSchema = z.object({
@@ -41,11 +42,17 @@ export function decodeSnapshot(bytes: Uint8Array, expectedChecksum: string): Sna
 }
 
 export class SnapshotStorage {
-  readonly client: S3Client;
-  readonly bucket: string;
+  readonly client!: S3Client;
+  readonly bucket!: string;
+  private readonly blobToken?: string;
   private initialization: Promise<void> | undefined;
 
   constructor(environment: Record<string, unknown> = process.env) {
+    if (environment.SNAPSHOT_STORAGE === "vercel-blob") {
+      this.blobToken = z.string().min(32).parse(environment.BLOB_READ_WRITE_TOKEN);
+      this.bucket = "flux-live-checkpoints";
+      return;
+    }
     const config = storageEnvSchema.parse(environment);
     if (environment.NODE_ENV === "production" && (config.S3_SECRET_KEY.length < 32 || /local_only|replace|example/i.test(config.S3_SECRET_KEY))) throw new Error("Production requires non-example storage credentials of at least 32 characters");
     this.bucket = config.S3_BUCKET;
@@ -56,9 +63,13 @@ export class SnapshotStorage {
     });
   }
 
-  async ready() { await this.client.send(new HeadBucketCommand({ Bucket: this.bucket })); }
+  async ready() {
+    if (this.blobToken) { await listBlobs({ token: this.blobToken, limit: 1 }); return; }
+    await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+  }
 
   async ensureBucket() {
+    if (this.blobToken) return;
     if (!this.initialization) {
       this.initialization = (async () => {
         try { await this.client.send(new HeadBucketCommand({ Bucket: this.bucket })); }
@@ -76,6 +87,11 @@ export class SnapshotStorage {
     await this.ensureBucket();
     const bytes = encodeSnapshot(snapshot);
     const checksum = digest(bytes);
+    if (this.blobToken) {
+      await putBlob(key, bytes, { access: "private", token: this.blobToken,
+        addRandomSuffix: false, allowOverwrite: false, contentType: "application/json" });
+      return { checksum, byteLength: bytes.byteLength };
+    }
     await this.client.send(new PutObjectCommand({
       Bucket: this.bucket, Key: key, Body: bytes, ContentType: "application/json",
       IfNoneMatch: "*", Metadata: { sha256: checksum },
@@ -84,6 +100,24 @@ export class SnapshotStorage {
   }
 
   async get(key: string, checksum: string): Promise<SnapshotPayload> {
+    if (this.blobToken) {
+      const result = await getBlob(key, { access: "private", token: this.blobToken, useCache: false });
+      if (!result || result.statusCode !== 200 || result.blob.size > MAX_SNAPSHOT_BYTES) {
+        throw new Error("Checkpoint snapshot is missing or too large");
+      }
+      const reader = result.stream.getReader();
+      const chunks: Uint8Array[] = []; let length = 0;
+      try {
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          length += chunk.value.byteLength;
+          if (length > MAX_SNAPSHOT_BYTES) { await reader.cancel(); throw new Error("Checkpoint snapshot is too large"); }
+          chunks.push(chunk.value);
+        }
+      } finally { reader.releaseLock(); }
+      return decodeSnapshot(Buffer.concat(chunks), checksum);
+    }
     const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
     if (!result.Body || (result.ContentLength ?? 0) > MAX_SNAPSHOT_BYTES) throw new Error("Checkpoint snapshot is missing or too large");
     return decodeSnapshot(await result.Body.transformToByteArray(), checksum);
