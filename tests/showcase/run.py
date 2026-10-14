@@ -22,7 +22,7 @@ directory = Path(tempfile.mkdtemp(prefix="flux-showcase-", dir="/tmp/opencode"))
 directory.chmod(0o700)
 source = directory / "source"
 shutil.copytree(ROOT, source, ignore=shutil.ignore_patterns(
-    "node_modules", ".git", ".next", "dist", ".env", ".env.*", "production.env", "showcase.env",
+    "node_modules", ".git", ".next", ".vercel", "dist", ".env", ".env.*", "production.env", "showcase.env",
     ".flux-private", "backups", "test-results", "playwright-report", "coverage", "__pycache__", "*.log", "*.tsbuildinfo",
 ))
 # The frozen source is mounted read-only; create the nested bind-mount target now.
@@ -60,6 +60,7 @@ override.write_text(f"""services:
       HOME: /tmp
       FLUX_SHOWCASE_URL: https://flux.example.com:9444
       FLUX_SHOWCASE_FIXTURE_TLS: "true"
+      FLUX_SHOWCASE_BOUNDARY_TEST: "true"
       FLUX_SHOWCASE_ARTIFACTS: /artifacts/test-results
     volumes:
       - "{source}:/release:ro"
@@ -92,8 +93,10 @@ try:
     config = json.loads(run(base + ["config", "--format", "json"], capture_output=True, text=True).stdout)
     if set(config["services"]) != {"web", "gateway"} or config["services"]["web"].get("ports"):
         raise RuntimeError("Showcase must contain only an unpublished web service and its HTTPS gateway")
-    if set(config["services"]["web"]["environment"]) != {"APP_ORIGIN"}:
+    if set(config["services"]["web"]["environment"]) != {"APP_ORIGIN", "FLUX_SHOWCASE_ONLY"}:
         raise RuntimeError("Showcase must not receive account, database, or SMTP configuration")
+    if config["services"]["web"]["environment"]["FLUX_SHOWCASE_ONLY"] != "true":
+        raise RuntimeError("Showcase must enforce read-only routing without its gateway too")
     run(docker + ["build", "-f", str(source / "deploy/Dockerfile"), "--target", "web", "-t", f"flux-web:{project}", str(source)])
     run(compose + ["up", "-d", "--wait", "--no-build"])
     deadline = time.monotonic() + 15
@@ -117,8 +120,9 @@ try:
         status, headers = request(context, method, "/demo")
         if status != 405 or headers.get("Allow") != "GET, HEAD":
             raise RuntimeError("Showcase must reject write methods before they reach Next.js")
+    run(compose + ["run", "--rm", "--no-deps", "-e", "FLUX_SHOWCASE_URL=http://web:3000", "-e", "FLUX_SHOWCASE_FIXTURE_TLS=false", "-e", "FLUX_SHOWCASE_ARTIFACTS=/artifacts/direct-test-results", "browser"])
     run(compose + ["run", "--rm", "--no-deps", "browser"])
-    print("Public showcase passed: trusted HTTPS, read-only routing, no backend services, and Chromium/Firefox walkthroughs.")
+    print("Public showcase passed: direct application boundary, trusted HTTPS, read-only routing, no backend services, and Chromium/Firefox walkthroughs.")
 except Exception:
     with (directory / "services.log").open("w") as output:
         subprocess.run(compose + ["logs", "--no-color", "--tail", "200"], env=environment, stdout=output, stderr=subprocess.STDOUT)

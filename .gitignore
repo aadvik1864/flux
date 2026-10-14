@@ -14,3 +14,4 @@ deploy/showcase.env
 backups/
 .flux-private/
 __pycache__/
+.vercel/

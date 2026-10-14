@@ -83,6 +83,13 @@ rejected write methods, and denied account/API/document routes. Browser TLS
 exceptions are limited to the disposable fixture; normal remote checks validate
 certificates.
 
+Vercel deploys only the showcase: seven policy units cover automatic platform mode,
+route/method denial, credential stripping, API rewrite suppression, and unchanged
+full-app behavior. The Docker showcase runs the browser suite directly against
+Next.js and again through HTTPS/Caddy, so a gateway cannot mask a failed application
+boundary. Set `FLUX_SHOWCASE_BOUNDARY_TEST=true` with `FLUX_SHOWCASE_URL` to run the
+same route checks against the public Vercel URL with normal TLS validation.
+
 ### Deployment and recovery
 
 The full release exercises secure cookies, CSP, resource/payload limits, the

@@ -1,0 +1,17 @@
+.git
+.env
+.env.*
+.flux-private
+deploy/production.env
+deploy/showcase.env
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/__pycache__
+**/*.tsbuildinfo
+**/*.log
+backups
+coverage
+test-results
+playwright-report

@@ -31,7 +31,7 @@ npm run dev:showcase
 ```
 
 Open **http://127.0.0.1:3000/demo**. The preview binds to loopback.
-For a public URL, use the separate [showcase deployment](docs/showcase.md).
+For a public URL, use [Vercel or the Docker showcase kit](docs/showcase.md).
 It serves only the demo and its assets; real workspace routes stay unavailable.
 
 ## Run the full app locally

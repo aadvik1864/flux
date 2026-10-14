@@ -5,16 +5,16 @@ content: a garden plan, an isolated experiment, its reviewed result, a discussio
 a Decision Bookmark, and saved checkpoints. Visitors can switch views and themes;
 they cannot edit, approve, merge, restore, or save documents.
 
-This deployment runs only **Next.js and Caddy**. There is no database,
-collaboration process, SMTP service, or connection to your real workspace. The
-gateway serves `/demo` and its assets, redirects `/` to `/demo`, rejects write
-methods, and returns 404 for login, API, document, and synchronization routes.
+Deploy the showcase on Vercel or with the standalone Next.js/Caddy kit. Neither
+needs a database, collaboration process, SMTP service, or connection to your real
+workspace. Both serve `/demo` and its assets, redirect `/` to `/demo`, reject write
+methods, and return 404 for login, API, document, and synchronization routes.
 Session cookies are neither forwarded nor set. The browser stores only its theme
 preference; sample navigation resets on reload.
 
 The full app still supports `/demo` as a public page and links to it from sign-in.
-That does not make real workspace routes public. Use the separate showcase Compose
-file when publishing **only** the demonstration.
+That does not make real workspace routes public. Use Vercel's showcase-only mode
+or the separate showcase Compose file when publishing the demonstration.
 
 ## Preview locally
 
@@ -28,7 +28,48 @@ npm run dev:showcase
 Open `http://127.0.0.1:3000/demo`. The frontend server must remain running. Other
 application routes need the full local stack; they are not part of this preview.
 
-## Put the showcase online
+## Vercel
+
+Use a Hobby project for this personal, non-commercial showcase. No database,
+storage add-on, SMTP credentials, or custom domain purchase is required.
+
+Import the private repository into a **new** Vercel project with:
+
+- Framework: **Next.js**; Root Directory: **apps/web**.
+- Include source files outside the Root Directory: **enabled**.
+- Node.js: **22.x**; standard/basic build resources.
+- Vercel Authentication: **preview deployments only**, so production is public.
+- Preview/production feedback toolbars: **off**.
+
+`apps/web/vercel.json` builds only the shared/editor packages and web app. On
+Vercel, the application automatically enforces the read-only allowlist, strips
+account credentials, and disables API rewrites. Deployment source/logs stay
+private (`public: false`); the public demo does not make GitHub public.
+Do not copy `.env` or `.flux-private` into project environment settings.
+`.vercelignore` excludes secrets, local configuration, backups, and build/test
+artifacts from CLI uploads.
+
+For CLI deployment, authenticate locally and link from the **repository root**:
+
+```bash
+npx vercel login
+npx vercel link --yes --project flux-showcase --scope YOUR_HOBBY_SCOPE
+npx vercel --prod --scope YOUR_HOBBY_SCOPE
+```
+
+The `.vercel.app` production URL should work without signing in. Check it with
+normal certificate validation (no fixture TLS exception):
+
+```bash
+FLUX_SHOWCASE_URL=https://YOUR_PROJECT.vercel.app FLUX_SHOWCASE_BOUNDARY_TEST=true npm run test:showcase
+```
+
+To test the same boundary on a local production server, set
+`FLUX_SHOWCASE_ONLY=true` for **both** build and startup. Ordinary development
+previews still retain the full app's routes. Vercel is not the deployment for the
+long-running collaboration server or your real workspace.
+
+## Self-hosted Docker
 
 Use an existing Linux Docker host and a DNS hostname you control. A free hostname
 from an existing host/DNS provider is fine; no paid integration is required. The
@@ -88,8 +129,8 @@ The Docker exercise additionally checks frontend-only service composition,
 hostname-verified TLS, production CSP, route denial, and rejected write methods.
 It uses loopback and a disposable test CA, not real public DNS/ACME evidence.
 
-No live deployment is implied by these tests. Choose the actual host/hostname and
-verify external access before sharing a link. The demo shows a prepared example,
+Local tests do not establish public reachability. Verify the chosen production
+URL before sharing it. The demo shows a prepared example,
 not live co-editing or completed calls/Office integration. Publishing still needs
 a dependency/image review and compliance with the third-party licenses listed in
 `ui-sources.md`; required credits must stay in place.

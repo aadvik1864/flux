@@ -1,5 +1,27 @@
 import { test, expect } from "@playwright/test";
 
+test("standalone deployments expose only read-only demo routes", async ({ request, baseURL }) => {
+  test.skip(process.env.FLUX_SHOWCASE_BOUNDARY_TEST !== "true", "Full-app previews intentionally retain account routes");
+  const root = await request.get("/", { maxRedirects: 0 });
+  expect(root.status()).toBe(308);
+  expect(new URL(root.headers().location, baseURL).pathname).toBe("/demo");
+  const demo = await request.get("/demo", { headers: { cookie: "flux_session=sample" } });
+  expect(demo.status()).toBe(200);
+  expect(demo.headers()["content-security-policy"]).toContain("strict-dynamic");
+  expect(demo.headers()["set-cookie"]).toBeUndefined();
+  expect((await request.head("/demo")).status()).toBe(200);
+  for (const path of ["/login", "/account/help", "/files/example", "/api/auth/me", "/sync", "/internal/rooms", "/invite/example", "/demoevil", "/_next/image?url=https://example.com/image.png"]) {
+    expect((await request.get(path)).status(), path).toBe(404);
+  }
+  for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+    for (const path of ["/demo", "/api/auth/register", "/_next/static/sample.js"]) {
+      const response = await request.fetch(path, { method });
+      expect(response.status(), `${method} ${path}`).toBe(405);
+      expect(response.headers().allow).toBe("GET, HEAD");
+    }
+  }
+});
+
 test("visitors can explore the workflow without accounts or document writes", async ({ page }, testInfo) => {
   const errors: string[] = [];
   const backendRequests: string[] = [];

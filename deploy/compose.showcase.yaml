@@ -12,6 +12,7 @@ services:
     tmpfs: [/tmp]
     environment:
       APP_ORIGIN: https://${FLUX_DOMAIN:?set FLUX_DOMAIN}
+      FLUX_SHOWCASE_ONLY: "true"
     healthcheck:
       test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/demo').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s

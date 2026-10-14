@@ -1,12 +1,32 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
+import { isShowcaseDeployment } from "./lib/showcase-deployment";
+
+function isAsset(path: string) {
+  return path.startsWith("/_next/static/") || path.startsWith("/art/") || path === "/icon.svg";
+}
 
 export function proxy(request: NextRequest) {
-  if (process.env.NODE_ENV !== "production") return NextResponse.next();
+  const showcase = isShowcaseDeployment();
+  const path = request.nextUrl.pathname;
+  const headers = new Headers(request.headers);
+  if (showcase) {
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return new NextResponse(null, { status: 405, headers: { Allow: "GET, HEAD", "Cache-Control": "no-store" } });
+    }
+    if (path === "/" || path === "/demo/") return NextResponse.redirect(new URL("/demo", request.url), 308);
+    if (path !== "/demo" && !isAsset(path)) {
+      return new NextResponse("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+    }
+    headers.delete("cookie");
+    headers.delete("authorization");
+  }
+  const passthrough = isAsset(path) || path === "/api" || path.startsWith("/api/") || path.startsWith("/_next/");
+  if (passthrough || process.env.NODE_ENV !== "production") return NextResponse.next({ request: { headers } });
   const nonce = randomBytes(18).toString("base64");
   const host = new URL(process.env.APP_ORIGIN ?? request.url).host;
-  const csp = `default-src 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://${host}; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`;
-  const headers = new Headers(request.headers);
+  const connect = showcase ? "'self'" : `'self' wss://${host}`;
+  const csp = `default-src 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src ${connect}; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`;
   headers.set("x-nonce", nonce);
   headers.set("Content-Security-Policy", csp);
   const response = NextResponse.next({ request: { headers } });
@@ -18,4 +38,4 @@ export function proxy(request: NextRequest) {
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   return response;
 }
-export const config = { matcher: ["/((?!api|_next/static|_next/image|icon.svg|art/).*)"] };
+export const config = { matcher: ["/:path*"] };
