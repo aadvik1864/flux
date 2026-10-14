@@ -2,26 +2,32 @@
 
 **Shared work. Safe experiments. Decisions that stay connected.**
 
-Flux is a collaborative document workspace. Write together, save a checkpoint,
-try changes in an isolated experiment, and review them before merging. Decision
-Bookmarks keep the explanation beside the discussion and document it came from.
+Flux is a shared place to write, try ideas, and make decisions with your team.
+Save a version of your work, explore changes in a separate copy, and review them
+before bringing them back. Keep discussions and decisions beside the document.
 
-## Features
+## Try Flux online
 
-- Rich-text documents with tables, live cursors, and server-confirmed saves.
-- Private workspaces, email-bound invitations, and server-enforced roles.
-- Named checkpoints, read-only history, and restore as a new revision.
-- Three-way experiment review with explicit conflicts and non-author approval.
-- Persistent discussions and decisions linked to their original checkpoint.
-- Browser draft recovery, keyboard navigation, and responsive day/night themes.
+- **[Live app](https://flux-live-tawny.vercel.app)**: the sign-in page is online.
+  Email setup is still in progress, so accounts and shared editing are not ready yet.
+- **[Demo](https://flux-showcase-three.vercel.app/demo)**: explore a sample workspace
+  without an account. The demo is read-only, so you can look around but cannot edit.
 
-Calls, Office editing, and fine-grained replay are not implemented.
+## What you can do
 
-## Try the showcase
+- Write together and see where your teammates are working.
+- Keep documents in private workspaces and invite your team.
+- Save named versions, browse earlier work, and restore a version.
+- Try changes in a separate copy and review them before adding them back.
+- Discuss ideas and save the reasons behind a decision.
+- Recover browser drafts and switch between light and dark themes.
 
-The read-only `/demo` walks through a fictional garden plan, its experiment,
-reviewed merge, discussion, and saved checkpoints. No account, database, or SMTP
-configuration is needed.
+Calls, Office file editing, and a detailed replay of every edit are not available yet.
+
+## Run the demo on your computer
+
+The demo shows a sample garden plan, proposed changes, a review, discussions,
+and saved versions. You do not need an account or email setup to run it.
 
 With Node.js 22.22.3 (tested) and npm:
 
@@ -70,10 +76,10 @@ document. Wait for **Saved** before refreshing or closing it.
 | Personal workspace over a private network | [Private access](docs/private-access.md) |
 | Invite-only app with verified email and SMTP | [Production and recovery](docs/production.md) |
 
-The kits are locally tested, not live deployments. Public hosting still needs
-a chosen host/hostname and external HTTPS checks. The full app runs one
-collaboration process and needs real mail delivery, backup custody, and
-target-host acceptance before use.
+The online demo is available at the link above. The live app is still being set up.
+The guides cover other ways to host Flux and keep backups. Before using it for
+real work, finish email setup and check that sign-in, shared editing, and recovery
+work on your host.
 
 Browser drafts are unencrypted, best-effort recovery copies, not server saves.
 Restoring a document retires its old editing generation; those drafts remain
