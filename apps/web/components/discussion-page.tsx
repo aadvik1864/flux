@@ -147,7 +147,7 @@ export function DiscussionPage({ fileId, branchId }: { fileId: string; branchId?
       <ol className="decision-list">{bookmarks.map(bookmark => <li key={bookmark.id}>
         <div className="decision-status" data-status={bookmark.status}>{statusLabel[bookmark.status]}</div><h3>{bookmark.title}</h3><p>{bookmark.explanation}</p>
         <span className="decision-byline">{bookmark.createdByName} · {new Date(bookmark.createdAt).toLocaleDateString()}</span>
-        <p className="decision-anchor-state" data-available={bookmark.anchorAvailable}>{bookmark.anchorAvailable ? "Anchor present in last saved state" : "Anchor unavailable — saved context is retained"}</p>
+        <p className="decision-anchor-state" data-available={bookmark.anchorAvailable}>{bookmark.anchorAvailable ? "Anchor present in last saved state" : "Anchor unavailable. Saved context is retained"}</p>
         <div className="decision-actions">
           <button className="text-button" disabled={actionBusy || denied} onClick={() => void viewContext(bookmark)}>View saved context</button>
           {bookmark.discussionMessageId && <button className="text-button" disabled={actionBusy || denied} onClick={() => void openDiscussion(bookmark)}>Linked discussion</button>}

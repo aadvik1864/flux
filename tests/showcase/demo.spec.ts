@@ -52,6 +52,7 @@ test("visitors can explore the workflow without accounts or document writes", as
   await page.route("**/api/**", route => route.abort());
   const response = await page.goto("/demo");
   expect(response?.status()).toBe(200);
+  await expect(page).toHaveTitle("Explore Flux: a read-only demo");
   await expect(page.getByRole("heading", { name: "See how a draft becomes a decision." })).toBeVisible();
   const paper = page.getByRole("article", { name: "Sample document" });
   await expect(paper).toContainText("at 9 am");

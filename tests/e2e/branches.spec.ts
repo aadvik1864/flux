@@ -217,7 +217,7 @@ test("conflict choices bind the approved result, not later UI choices; archived 
     await change(main, "intro", "Main competing introduction."); await change(source, "intro", "Experiment competing introduction.");
     const offline = await offlineContext.newPage(); await open(offline, file.id, branch.id); await offlineContext.setOffline(true);
     await fillBlock(offline, "budget", "Never-sent offline experiment note.");
-    await expect(offline.getByText("Browser backup saved — shared save is still pending.", { exact: true })).toBeVisible();
+    await expect(offline.getByText("Browser backup saved. Shared save is still pending.", { exact: true })).toBeVisible();
     const review = await reviewer.newPage(); await review.goto(`/files/${file.id}/branches/${branch.id}/review`);
     await expect(review.getByRole("button", { name: "Approve reviewed result", exact: true })).toBeDisabled();
     await review.getByLabel("Use experiment", { exact: true }).check();

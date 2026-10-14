@@ -3,7 +3,7 @@ import { DemoPage } from "../../components/demo-page";
 import "./demo.css";
 
 export const metadata: Metadata = {
-  title: "Explore Flux — a read-only demo",
+  title: "Explore Flux: a read-only demo",
   description: "Follow a shared document through an experiment, reviewed merge, and Decision Bookmark. No account needed.",
 };
 

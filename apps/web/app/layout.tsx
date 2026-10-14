@@ -10,7 +10,7 @@ const sora = localFont({ src: "./fonts/SoraLatin.woff2", variable: "--font-sora"
 const sourceSans = localFont({ src: "./fonts/SourceSans3Latin.woff2", variable: "--font-source-sans", weight: "200 900", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Flux — a shared space for your next idea",
+  title: "Flux: a shared space for your next idea",
   description: "Work together on shared documents. A foundation for safe experiments and decisions that stay connected.",
 };
 

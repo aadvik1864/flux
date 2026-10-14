@@ -122,7 +122,7 @@ Status shows at most 100 open quarantines; repeat after resolving those shown.
   uptime monitor for `https://YOUR_DOMAIN/api/ready`, and alert on unhealthy
   containers, restart loops, mail failures/backlog, backup failures, and disk usage
   above 70% (urgent at 85%). Send alerts somewhere other than Flux's own SMTP queue.
-- Request logs contain generated IDs, route templates, status, and latency—not
+- Request logs contain generated IDs, route templates, status, and latency, not
   raw token-bearing URLs or request bodies. Unexpected failures omit database
   internals from clients/logs. Gateway access logging is deliberately not enabled.
 - Auth: 60 requests/IP/15 minutes in one API process, plus a persistent
@@ -212,7 +212,7 @@ Caddy's certificates. A fresh gateway can obtain new public certificates.
    fix or the isolated restore procedure; don't overwrite live data.
 4. Rotate collaboration secrets during coordinated API/sync restart. Revoke sessions
    if identity secrets are compromised. Changing database/storage credentials also
-   requires updating the actual database/storage account—not only an env file.
+   requires updating the actual database/storage account, not only an env file.
 5. Drain the outbox before changing its encryption key; pending messages need the
    old key. Keep backup keys for every retained backup. Test rotation in staging.
 
