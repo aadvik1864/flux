@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Bookmark, Check, FileText, GitBranch, GitMerge, History, LockKeyhole, MessageSquare } from "lucide-react";
 import type { DocumentContent } from "@flux/shared";
 import { demoDecision, demoDiscussion, demoDocuments } from "../lib/demo";
@@ -54,8 +54,10 @@ function Note({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export function DemoPage() {
+  const [mounted, setMounted] = useState(false);
   const [view, setView] = useState<View>("main");
   const [checkpoint, setCheckpoint] = useState<"base" | "merged">("base");
+  useEffect(() => setMounted(true), []);
   const explanation = explanations[view];
   const content = view === "experiment" || view === "decisions" ? demoDocuments.experiment
     : view === "review" ? demoDocuments.merged
@@ -88,7 +90,7 @@ export function DemoPage() {
         </div>
         <nav aria-label="Explore the sample workflow">
           {views.map(({ id, label, icon: Icon }) => (
-            <button key={id} type="button" aria-pressed={view === id} onClick={() => setView(id)}>
+            <button key={id} type="button" disabled={!mounted} aria-pressed={view === id} onClick={() => setView(id)}>
               <Icon size={17} />{label}
             </button>
           ))}
@@ -102,10 +104,10 @@ export function DemoPage() {
         </div>
         {view === "history" && (
           <div className="demo-checkpoints" role="group" aria-label="Choose a checkpoint">
-            <button type="button" aria-pressed={checkpoint === "base"} onClick={() => setCheckpoint("base")}>
+            <button type="button" disabled={!mounted} aria-pressed={checkpoint === "base"} onClick={() => setCheckpoint("base")}>
               <Bookmark size={15} />First plan
             </button>
-            <button type="button" aria-pressed={checkpoint === "merged"} onClick={() => setCheckpoint("merged")}>
+            <button type="button" disabled={!mounted} aria-pressed={checkpoint === "merged"} onClick={() => setCheckpoint("merged")}>
               <GitMerge size={15} />After the reviewed merge
             </button>
           </div>
@@ -125,7 +127,7 @@ export function DemoPage() {
         {view === "experiment" && (
           <Note title="What changed">
             <p>The experiment changes one paragraph: 9 am becomes 9:30 am. The team can review it before touching main.</p>
-            <button className="text-button" type="button" onClick={() => setView("review")}>See the reviewed result</button>
+            <button className="text-button" type="button" disabled={!mounted} onClick={() => setView("review")}>See the reviewed result</button>
           </Note>
         )}
         {view === "decisions" ? (
@@ -152,13 +154,13 @@ export function DemoPage() {
             <p>{view === "history"
               ? "Earlier checkpoints remain readable after a merge. Nothing in this preview can restore or overwrite a document."
               : "See the discussion behind the later start, and the decision kept alongside its checkpoint."}</p>
-            <button className="text-button" type="button" onClick={() => setView(view === "history" ? "main" : "decisions")}>
+            <button className="text-button" type="button" disabled={!mounted} onClick={() => setView(view === "history" ? "main" : "decisions")}>
               {view === "history" ? "Back to shared document" : "Read the decision"}
             </button>
           </Note>
         )}
         {view !== "history" && (
-          <button className="button secondary demo-history-link" type="button" onClick={openCheckpoint}>
+          <button className="button secondary demo-history-link" type="button" disabled={!mounted} onClick={openCheckpoint}>
             <History size={16} />Read the first checkpoint
           </button>
         )}

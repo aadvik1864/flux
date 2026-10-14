@@ -31,9 +31,12 @@ test("standalone deployments expose only read-only demo routes", async ({ reques
       expect(response.headers().allow).toBe("GET, HEAD");
     }
     const image = await request.fetch(imagePaths[1], { method });
-    expect(image.status()).toBe(405);
-    if (image.headers().allow) expect(image.headers().allow).toBe("GET, HEAD");
-    else expect(image.headers()["x-vercel-error"]).toBe("INVALID_REQUEST_METHOD");
+    const nativeOptions = method === "OPTIONS" && image.headers()["x-vercel-error"] === "INVALID_IMAGE_OPTIMIZE_REQUEST";
+    expect(image.status()).toBe(nativeOptions ? 400 : 405);
+    if (!nativeOptions) {
+      if (image.headers().allow) expect(image.headers().allow).toBe("GET, HEAD");
+      else expect(image.headers()["x-vercel-error"]).toBe("INVALID_REQUEST_METHOD");
+    }
   }
 });
 
@@ -114,5 +117,7 @@ test("the sample document is readable without JavaScript", async ({ browser }) =
   const hint = page.locator(".demo-noscript");
   await expect(hint).toBeVisible();
   expect(await hint.textContent()).toContain("JavaScript is needed to switch views.");
+  await expect(page.getByRole("button", { name: "Experiment", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Read the decision", exact: true })).toBeDisabled();
   await context.close();
 });
