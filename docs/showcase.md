@@ -44,7 +44,9 @@ Import the private repository into a **new** Vercel project with:
 `apps/web/vercel.json` builds only the shared/editor packages and web app. By
 default on Vercel, the application enforces the read-only allowlist, strips
 account credentials, and disables API rewrites. Deployment source/logs stay
-private (`public: false`); the public demo does not make GitHub public.
+private behind Vercel's authenticated access; the public demo does not make
+GitHub public. The legacy `public` configuration property is not accepted by
+current Git deployments.
 Image optimization is disabled and both image-source allowlists are empty in
 showcase builds; the illustrations are already WebP assets. Vercel handles its
 native optimizer before application routing and ignores `unoptimized` in the

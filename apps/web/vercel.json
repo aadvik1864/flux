@@ -2,6 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "cd ../.. && npm ci --include=dev --workspaces --include-workspace-root",
-  "buildCommand": "cd ../.. && npm run build -w @flux/shared && npm run build -w @flux/document-model && npm run build -w @flux/web",
-  "public": false
+  "buildCommand": "cd ../.. && npm run build -w @flux/shared && npm run build -w @flux/document-model && npm run build -w @flux/web"
 }
