@@ -41,8 +41,8 @@ Import the private repository into a **new** Vercel project with:
 - Vercel Authentication: **preview deployments only**, so production is public.
 - Preview/production feedback toolbars: **off**.
 
-`apps/web/vercel.json` builds only the shared/editor packages and web app. On
-Vercel, the application automatically enforces the read-only allowlist, strips
+`apps/web/vercel.json` builds only the shared/editor packages and web app. By
+default on Vercel, the application enforces the read-only allowlist, strips
 account credentials, and disables API rewrites. Deployment source/logs stay
 private (`public: false`); the public demo does not make GitHub public.
 Image optimization is disabled and both image-source allowlists are empty in
@@ -73,8 +73,9 @@ FLUX_SHOWCASE_URL=https://YOUR_PROJECT.vercel.app FLUX_SHOWCASE_BOUNDARY_TEST=tr
 
 To test the same boundary on a local production server, set
 `FLUX_SHOWCASE_ONLY=true` for **both** build and startup. Ordinary development
-previews still retain the full app's routes. Vercel is not the deployment for the
-long-running collaboration server or your real workspace.
+previews still retain the full app's routes. The separate [live frontend](live-vercel.md)
+uses `FLUX_DEPLOYMENT_MODE=live` and a backend hosted outside Vercel. Explicit
+`FLUX_SHOWCASE_ONLY=true` always keeps the showcase boundary enabled.
 
 ## Self-hosted Docker
 

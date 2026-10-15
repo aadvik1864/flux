@@ -15,3 +15,7 @@ backups
 coverage
 test-results
 playwright-report
+
+.agents
+.claude
+skills-lock.json

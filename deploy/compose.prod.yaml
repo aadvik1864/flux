@@ -7,7 +7,7 @@ x-app-environment: &app-environment
   COLLABORATION_SECRET: ${COLLABORATION_SECRET:?set COLLABORATION_SECRET}
   COLLABORATION_INTERNAL_URL: http://collaboration:1234
   REQUIRE_EMAIL_VERIFICATION: "true"
-  AUTH_MODE: invite-only
+  AUTH_MODE: ${AUTH_MODE:-open}
   S3_ENDPOINT: http://object-storage:9000
   S3_REGION: us-east-1
   S3_BUCKET: flux-checkpoints

@@ -7,6 +7,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 function setup(showcase = true) {
   vi.stubEnv("VERCEL", showcase ? "1" : undefined);
+  vi.stubEnv("FLUX_DEPLOYMENT_MODE", undefined);
   vi.stubEnv("FLUX_SHOWCASE_ONLY", undefined);
   vi.stubEnv("NODE_ENV", "production");
 }

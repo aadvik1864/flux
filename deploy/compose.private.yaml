@@ -1,5 +1,15 @@
 # Always use together with compose.prod.yaml. Never publish a wildcard address.
+x-private-environment: &private-environment
+  AUTH_MODE: invite-only
 services:
+  api:
+    environment: *private-environment
+  collaboration:
+    environment: *private-environment
+  migrate:
+    environment: *private-environment
+  tools:
+    environment: *private-environment
   gateway:
     ports: !override
       - target: ${FLUX_PRIVATE_PORT:-8443}

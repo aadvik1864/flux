@@ -4,6 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 
 const origin = "https://flux.example.com:9443";
 const directory = process.env.FLUX_SMOKE_DIRECTORY;
+const inviteOnly = process.env.FLUX_SMOKE_INVITE_ONLY === "true";
 const diagnostics = `${directory}/diagnostics`;
 await mkdir(diagnostics, { recursive: true, mode: 0o700 });
 const browser = await chromium.launch({ args: ["--no-proxy-server"] });
@@ -70,15 +71,18 @@ try {
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   assert.equal((await context.request.post(`${origin}/api/auth/logout`, { headers: { Origin: "https://not-flux.example.com" } })).status(), 403);
   for (const path of ["/internal/history", "/api/internal/history", "/sync/internal/history", "/internal/branches", "/api/internal/branches", "/sync/internal/branches", "/sync/ready"]) assert.equal((await page.evaluate(async path => (await fetch(path)).status, path)), 404);
-  assert.equal((await request(page, "/auth/register", { name: "Uninvited", email: "uninvited@example.com" })).status, 403);
-  assert.equal((await request(page, "/auth/options", undefined, "GET")).data.inviteOnly, true);
+  if (inviteOnly) assert.equal((await request(page, "/auth/register", { name: "Uninvited", email: "uninvited@example.com" })).status, 403);
+  assert.equal((await request(page, "/auth/options", undefined, "GET")).data.inviteOnly, inviteOnly);
   assert.equal((await request(page, "/auth/register", { name: "x".repeat(70_000), email: "large@example.com" })).status, 413);
   assert.equal((await page.evaluate(async () => (await fetch("/api/workspaces", { method: "POST", headers: { "Content-Type": "application/json" }, body: "not json" })).status)), 400);
-  const invite = await emailLink("owner@example.com", /https:\/\/flux\.example\.com:9443\/login\?invitation=[A-Za-z0-9_-]{43}/);
-  const invitationToken = new URL(invite).searchParams.get("invitation");
-  assert.equal((await request(page, "/auth/register", { name: "Wrong email", email: "wrong@example.com", invitationToken })).status, 403);
-  await page.goto(invite);
+  if (inviteOnly) {
+    const invite = await emailLink("owner@example.com", /https:\/\/flux\.example\.com:9443\/login\?invitation=[A-Za-z0-9_-]{43}/);
+    const invitationToken = new URL(invite).searchParams.get("invitation");
+    assert.equal((await request(page, "/auth/register", { name: "Wrong email", email: "wrong@example.com", invitationToken })).status, 403);
+    await page.goto(invite);
+  }
   await page.getByRole("button", { name: "Create an account", exact: true }).click();
+  if (!inviteOnly) await expect(page.getByText("Enter your email. Verify it, then choose your password.", { exact: true })).toBeVisible();
   await page.getByLabel("Your name").fill("Release owner");
   await page.getByLabel("Email address").fill("owner@example.com");
   await page.getByRole("button", { name: "Verify and create account", exact: true }).click();
@@ -105,6 +109,26 @@ try {
   const workspaceId = created.data.id;
   const file = await request(page, `/workspaces/${workspaceId}/files`, { name: "Deployment recovery" });
   assert.equal(file.status, 201);
+  if (!inviteOnly) {
+    const outsiderContext = await newContext(), outsiderPage = await outsiderContext.newPage();
+    await outsiderPage.goto("/login");
+    assert.equal((await request(outsiderPage, "/auth/register", { name: "Public outsider", email: "outsider@example.com" })).status, 201);
+    assert.equal((await request(outsiderPage, "/workspaces", undefined, "GET")).status, 401);
+    await outsiderPage.goto(await emailLink("outsider@example.com", /https:\/\/flux\.example\.com:9443\/account\/verify-email#[A-Za-z0-9_-]{43}/));
+    await outsiderPage.getByLabel("New password", { exact: true }).fill(password);
+    await outsiderPage.getByLabel("Confirm password").fill(password);
+    await outsiderPage.getByRole("button", { name: "Verify email and continue" }).click();
+    await expect(outsiderPage).toHaveURL(origin + "/");
+    assert.deepEqual((await request(outsiderPage, "/workspaces", undefined, "GET")).data, []);
+    assert.equal((await request(outsiderPage, `/workspaces/${workspaceId}`, undefined, "GET")).status, 404);
+    assert.equal((await request(outsiderPage, `/files/${file.data.id}`, undefined, "GET")).status, 404);
+    assert.equal((await request(outsiderPage, `/files/${file.data.id}/collaboration-token`)).status, 404);
+    assert.equal((await request(outsiderPage, `/invitations/${"a".repeat(43)}/accept`)).status, 410);
+    const privateWorkspace = await request(outsiderPage, "/workspaces", { name: "Public account private workspace" });
+    assert.equal(privateWorkspace.status, 201);
+    assert.equal((await request(page, `/workspaces/${privateWorkspace.data.id}`, undefined, "GET")).status, 404);
+    await outsiderContext.close();
+  }
   await page.goto(`/files/${file.data.id}`);
   const editor = page.getByRole("textbox", { name: "Document content" });
   await expect(editor).toBeVisible();

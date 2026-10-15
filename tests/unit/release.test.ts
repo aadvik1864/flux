@@ -18,7 +18,9 @@ describe("production configuration", () => {
   it("preserves local demo defaults but fails closed in production", () => {
     expect(parseRuntimeConfig({ DATABASE_URL: production.DATABASE_URL, COLLABORATION_SECRET: "x".repeat(32) }).REQUIRE_EMAIL_VERIFICATION).toBe(false);
     expect(parseRuntimeConfig(production).AUTH_MODE).toBe("invite-only");
-    for (const change of [ { DATABASE_URL: "postgresql://flux:password@postgres:5432/flux" }, { APP_ORIGIN: "http://flux.example.com" }, { APP_ORIGIN: "https://flux.example.com/" }, { COLLABORATION_SECRET: "replace-this".repeat(8) }, { AUTH_MODE: "open" }, { REQUIRE_EMAIL_VERIFICATION: "false" }, { MAIL_MODE: "disabled" }, { SMTP_USER: "" }, { MAIL_ENCRYPTION_KEY: "short" } ]) expect(() => parseRuntimeConfig({ ...production, ...change })).toThrow();
+    expect(parseRuntimeConfig({ ...production, AUTH_MODE: "open" }).AUTH_MODE).toBe("open");
+    expect(() => parseRuntimeConfig({ ...production, AUTH_MODE: "open", REQUIRE_EMAIL_VERIFICATION: "false" })).toThrow("email verification");
+    for (const change of [ { DATABASE_URL: "postgresql://flux:password@postgres:5432/flux" }, { APP_ORIGIN: "http://flux.example.com" }, { APP_ORIGIN: "https://flux.example.com/" }, { COLLABORATION_SECRET: "replace-this".repeat(8) }, { REQUIRE_EMAIL_VERIFICATION: "false" }, { MAIL_MODE: "disabled" }, { SMTP_USER: "" }, { MAIL_ENCRYPTION_KEY: "short" } ]) expect(() => parseRuntimeConfig({ ...production, ...change })).toThrow();
   });
   it("encrypts the email outbox with authenticated encryption", () => {
     const message = { to: "person@example.com", subject: "Verify", text: "https://flux.example.com/account/verify-email#secret" };

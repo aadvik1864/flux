@@ -9,7 +9,8 @@ Keep your discussions and decisions beside the document.
 ## Try it
 
 - **[Live app](https://flux-live-tawny.vercel.app)**: use your own private workspace.
-  You need an invitation and must confirm your email to create an account.
+  Anyone can sign up and confirm their email. An invitation is needed only to join
+  someone else’s workspace.
 - **[Demo](https://flux-showcase-three.vercel.app/demo)**: look around a sample
   workspace. No account is needed. You can explore, but you cannot edit.
 

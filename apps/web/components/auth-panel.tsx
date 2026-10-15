@@ -74,7 +74,7 @@ export function AuthPanel() {
       <div className="auth-form-wrap">
         <div className="auth-form-art"><PeopleArtwork /></div>
         <h2 id="sign-in-heading">{registering ? "Make room for your team" : mode === "forgot" ? "Recover your account" : mode === "resend" ? "Verify your email" : "Welcome back"}</h2>
-        <p>{registering ? options?.emailVerification ? "Use your invited email. Choose your password after verifying it." : "Create your account, then open a workspace." : mode === "forgot" ? "We’ll email a link to choose a new password." : mode === "resend" ? "Request a fresh link for your registered email address." : "Sign in to pick up where your team left off."}</p>
+        <p>{registering ? options?.emailVerification ? options.inviteOnly ? "Use your invited email. Choose your password after verifying it." : "Enter your email. Verify it, then choose your password." : "Create your account, then open a workspace." : mode === "forgot" ? "We’ll email a link to choose a new password." : mode === "resend" ? "Request a fresh link for your registered email address." : "Sign in to pick up where your team left off."}</p>
         <form className="stack-form" onSubmit={submit}>
           {registering && <label>Your name<input name="name" autoComplete="name" maxLength={120} required /></label>}
           <label>Email address<input name="email" type="email" autoComplete="email" maxLength={254} required /></label>

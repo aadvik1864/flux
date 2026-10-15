@@ -17,7 +17,9 @@ microservice fleet, Redis, LiveKit, or Office integration is required yet.
 Passwords use salted scrypt. Session tokens are random 256-bit values; only their
 SHA-256 hashes are stored. Cookies are HttpOnly, SameSite=Lax, and Secure in
 production. Mutating API requests must carry the configured `APP_ORIGIN`.
-Production additionally requires verified email and invite-only signup. Email
+Production additionally requires verified email. Signup is public by default;
+joining another user's workspace requires an email-bound invitation. The private
+deployment can restrict account creation too. Email
 verification/reset uses expiring, hashed one-use tokens and user-row locks. SMTP
 delivery comes from an encrypted transactional outbox with capped retry/backoff,
 permanent-failure quarantine, redacted best-effort HTTPS alerts, and audited

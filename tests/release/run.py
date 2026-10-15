@@ -75,6 +75,7 @@ override.write_text(f"""services:
       HOME: /tmp
       FLUX_SMOKE_DIRECTORY: /artifacts
       FLUX_SMOKE_INBOX_URL: http://inbox:8080/messages
+      FLUX_SMOKE_INVITE_ONLY: "{"true" if args.private else "false"}"
     volumes:
       - "{source}/tests/release/browser.mjs:/release/browser.mjs:ro"
       - "{root}/node_modules:/release/node_modules:ro"
@@ -101,7 +102,8 @@ try:
     run(compose + ["up", "-d", "--wait", "collaboration", "api", "web", "gateway"])
     run(compose + ["run", "--rm", "--no-deps", "tools", "node", "dist/operations.js", "smtp-check"])
     run(compose + ["run", "--rm", "--no-deps", "tools", "node", "/app/tests/release/check-mail.mjs"])
-    run(compose + ["run", "--rm", "--no-deps", "tools", "node", "dist/operations.js", "invite", "owner@example.com"])
+    if args.private:
+        run(compose + ["run", "--rm", "--no-deps", "tools", "node", "dist/operations.js", "invite", "owner@example.com"])
     # Browser networking is namespaced: unrelated host Docker interfaces cannot
     # interrupt Chromium with ERR_NETWORK_CHANGED. Never retry mutations to hide it.
     run(compose + ["run", "--rm", "--no-deps", "browser"])

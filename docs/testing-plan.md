@@ -83,8 +83,9 @@ rejected write methods, and denied account/API/document routes. Browser TLS
 exceptions are limited to the disposable fixture; normal remote checks validate
 certificates.
 
-Vercel deploys only the showcase: seven policy units cover automatic platform mode,
-route/method denial, credential stripping, API rewrite suppression, and unchanged
+Vercel defaults to the showcase; an explicit live mode preserves backend routing.
+Policy units cover automatic platform mode, route/method denial, credential
+stripping, API rewrite suppression, and unchanged
 full-app behavior. The Docker showcase runs the browser suite directly against
 Next.js and again through HTTPS/Caddy, so a gateway cannot mask a failed application
 boundary. Set `FLUX_SHOWCASE_BOUNDARY_TEST=true` with `FLUX_SHOWCASE_URL` to run the
@@ -96,6 +97,11 @@ The full release exercises secure cookies, CSP, resource/payload limits, the
 collaboration singleton lease, encrypted cold backup, empty-target restore,
 restored document/checkpoint/discussion/decision state, revoked sessions,
 superseded approvals, generation fencing, and populated-target refusal.
+
+Public signup checks require email verification before issuing a session. A
+verified account starts without workspace memberships, can create its own private
+workspace, and cannot read or join someone else's without an email-bound
+invitation. The private overlay separately retains invite-only account creation.
 
 Private checks additionally cover private-only port/origin resolution, protected
 independent secrets, Docker context isolation, startup image preflight, serialized

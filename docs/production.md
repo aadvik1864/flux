@@ -55,15 +55,19 @@ docker compose --env-file deploy/production.env -f deploy/compose.prod.yaml up -
 docker compose --env-file deploy/production.env -f deploy/compose.prod.yaml run --rm migrate
 docker compose --env-file deploy/production.env -f deploy/compose.prod.yaml run --rm --no-deps tools node dist/operations.js smtp-check
 docker compose --env-file deploy/production.env -f deploy/compose.prod.yaml up -d --wait
-docker compose --env-file deploy/production.env -f deploy/compose.prod.yaml run --rm --no-deps tools node dist/operations.js invite owner@your-domain.com
 ```
 
-The first owner receives an email-bound, 48-hour signup invitation. Signup creates
-an unverified account without a usable password/session. The recipient's 24-hour
-email verification link lets them choose their own password. Only then can they
-create a workspace. Workspace owners/admins invite teammates through the UI;
-those links also authorize invited-address signup. Reopen the workspace invitation
-after verifying to join it. A valid invitation is not proof of email ownership.
+Anyone can register without an account invitation. Signup creates an unverified
+account without a usable password/session. The recipient's 24-hour email
+verification link lets them choose their own password. Only then can they create
+their own private workspace. Signup does not grant access to existing workspaces.
+Workspace owners/admins invite teammates through the UI with email-bound,
+48-hour links. Reopen the workspace invitation after verifying to join it.
+A valid invitation is not proof of email ownership.
+
+For an invite-only installation, set `AUTH_MODE=invite-only` in the environment
+file and use `tools node dist/operations.js invite EMAIL` to issue an initial
+account invitation. The private-network overlay keeps this restriction enabled.
 
 Existing development/imported accounts are **not** silently marked verified.
 They must request a verification link and choose a new password before production
