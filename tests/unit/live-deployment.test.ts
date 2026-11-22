@@ -1,22 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { isShowcaseDeployment } from "../../apps/web/lib/showcase-deployment";
 import { proxy } from "../../apps/web/proxy";
 import { parseRuntimeConfig } from "../../apps/api/src/runtime-config";
 
 afterEach(() => vi.unstubAllEnvs());
 describe("live deployment isolation", () => {
-  it("requires an explicit live setting and preserves an explicit showcase setting", () => {
-    vi.stubEnv("VERCEL", "1");
-    expect(isShowcaseDeployment()).toBe(true);
-    vi.stubEnv("FLUX_DEPLOYMENT_MODE", "live");
-    expect(isShowcaseDeployment()).toBe(false);
-    vi.stubEnv("FLUX_SHOWCASE_ONLY", "true");
-    expect(isShowcaseDeployment()).toBe(true);
-  });
   it("allows login and forwards API credentials in live mode", () => {
     vi.stubEnv("VERCEL", "1"); vi.stubEnv("FLUX_DEPLOYMENT_MODE", "live");
-    vi.stubEnv("NODE_ENV", "production"); vi.stubEnv("FLUX_SHOWCASE_ONLY", undefined);
+    vi.stubEnv("NODE_ENV", "production");
     const response = proxy(new NextRequest("https://flux-live.vercel.app/api/auth/me", { headers: { cookie: "__Host-flux_session=sample" } }));
     expect(response.headers.get("x-middleware-next")).toBe("1");
     expect(response.headers.get("x-middleware-request-cookie")).toBe("__Host-flux_session=sample");
@@ -24,7 +15,7 @@ describe("live deployment isolation", () => {
   });
   it("allows only the configured secure collaboration origin in CSP", () => {
     vi.stubEnv("VERCEL", "1"); vi.stubEnv("FLUX_DEPLOYMENT_MODE", "live");
-    vi.stubEnv("NODE_ENV", "production"); vi.stubEnv("FLUX_SHOWCASE_ONLY", undefined);
+    vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("NEXT_PUBLIC_COLLABORATION_URL", "wss://flux-backend.onrender.com/sync");
     const csp = proxy(new NextRequest("https://flux-live.vercel.app/login")).headers.get("content-security-policy");
     expect(csp).toContain("connect-src 'self' wss://flux-backend.onrender.com;");

@@ -93,7 +93,6 @@ export function AuthPanel() {
     <footer className="auth-footer">
       <span>Bring your people. Keep your progress.</span>
       <nav aria-label="About Flux">
-        <Link href="/demo">Explore the demo</Link>
         <Link href="/account/help">Account and data help</Link>
       </nav>
     </footer>

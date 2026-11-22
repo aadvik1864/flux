@@ -10,7 +10,6 @@ test-results/
 *.tsbuildinfo
 *.log
 deploy/production.env
-deploy/showcase.env
 backups/
 .flux-private/
 __pycache__/

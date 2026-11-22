@@ -4,9 +4,6 @@ The live frontend is the separate `tls124/flux-live` Vercel project with root
 directory `apps/web`. Set `FLUX_DEPLOYMENT_MODE=live`, `APP_ORIGIN` to its stable
 production HTTPS URL, `API_INTERNAL_URL` to the Render backend URL plus `/api`,
 and `NEXT_PUBLIC_COLLABORATION_URL` to the backend's WSS URL plus `/sync`.
-Showcase deployments keep their default restrictions; explicitly setting
-`FLUX_SHOWCASE_ONLY=true` always takes precedence.
-
 The backend runs the existing API, mail worker and exactly one collaboration
 process behind `deploy/live-runtime.mjs` on one free Render web instance. HTTP
 traffic is accepted only under `/api/`, WebSocket upgrades only on `/sync`,

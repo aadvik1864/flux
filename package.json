@@ -12,7 +12,6 @@
   "scripts": {
     "build:packages": "npm run build -w @flux/shared && npm run build -w @flux/document-model && npm run build -w @flux/storage",
     "dev": "npm run build:packages && concurrently -k -n web,api,sync -c blue,green,magenta \"npm run dev -w @flux/web\" \"npm run dev -w @flux/api\" \"npm run dev -w @flux/collaboration\"",
-    "dev:showcase": "npm run build -w @flux/shared && npm run build -w @flux/document-model && npm run dev -w @flux/web",
     "build": "npm run build:packages && npm run build -w @flux/api && npm run build -w @flux/collaboration && npm run build -w @flux/web",
     "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present && tsc -p tsconfig.tests.json",
     "test": "npm run build:packages && vitest run",
@@ -20,8 +19,6 @@
     "test:release": "python3 tests/release/run.py",
     "test:private": "python3 -m unittest discover -s tests/private -p 'test_*.py'",
     "test:release:private": "python3 tests/release/run.py --private",
-    "test:showcase": "npm run build:packages && playwright test -c playwright.showcase.config.ts",
-    "test:release:showcase": "python3 tests/showcase/run.py",
     "db:generate": "npm run db:generate -w @flux/api",
     "db:migrate": "npm run db:migrate -w @flux/api",
     "infra:up": "docker compose up -d",

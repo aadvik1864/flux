@@ -63,7 +63,7 @@ export function ClickSpark({ className = "", children }: Pick<HTMLAttributes<HTM
         return true;
       });
       ctx.globalAlpha = 1;
-      // Unlike the upstream demo, do not run an animation loop while idle.
+      // Do not run an animation loop while idle.
       frame.current = sparks.current.length ? requestAnimationFrame(draw) : 0;
     };
     wake.current = () => { if (!frame.current) frame.current = requestAnimationFrame(draw); };

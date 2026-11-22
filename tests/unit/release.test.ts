@@ -15,7 +15,7 @@ const production = {
 };
 
 describe("production configuration", () => {
-  it("preserves local demo defaults but fails closed in production", () => {
+  it("preserves local development defaults but fails closed in production", () => {
     expect(parseRuntimeConfig({ DATABASE_URL: production.DATABASE_URL, COLLABORATION_SECRET: "x".repeat(32) }).REQUIRE_EMAIL_VERIFICATION).toBe(false);
     expect(parseRuntimeConfig(production).AUTH_MODE).toBe("invite-only");
     expect(parseRuntimeConfig({ ...production, AUTH_MODE: "open" }).AUTH_MODE).toBe("open");

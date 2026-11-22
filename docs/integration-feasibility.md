@@ -1,6 +1,6 @@
 # Future integration constraints
 
-Calls and Office editing are outside the document MVP and public showcase.
+Calls and Office editing are outside the document MVP.
 Integrations must be self-hostable without a paid subscription; hosting resources
 and license obligations still apply. The license review below was made on
 2026-10-12 and must be repeated for the exact release selected later.

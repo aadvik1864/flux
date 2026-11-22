@@ -13,17 +13,8 @@
 - Invite-only Docker deployment, verified email, encrypted SMTP outbox, and
   encrypted backup/empty-target restore.
 - Personal private-network setup and opt-in backup/maintenance/health timers.
-- Account-free read-only showcase with a separate frontend-only HTTPS deployment.
 
 Validation coverage and its limits are in [testing](testing-plan.md).
-
-## Next: publish the showcase
-
-- Choose the public host/hostname and verify trusted HTTPS from outside the VPN.
-- Review dependency/image findings and bundled licenses.
-- Check all sample views on a real phone and desktop before sharing the link.
-
-See [showcase setup](showcase.md). No public deployment has been made.
 
 ## Before using the full app
 

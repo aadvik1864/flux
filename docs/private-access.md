@@ -68,7 +68,7 @@ fixtures. Do not relocate secrets into another folder inside the checkout.
 state storage; use the same option for subsequent commands.
 
 This creates a **separate empty private project**; it neither copies nor deletes
-the local development database, documents, or demo accounts. Existing development
+the local development database, documents, or sample accounts. Existing development
 accounts do not become verified production accounts automatically.
 
 ## 2. Fill your SMTP settings locally
