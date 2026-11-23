@@ -1,4 +1,5 @@
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
+import { isIP } from "node:net";
 import { NextResponse, type NextRequest } from "next/server";
 function isAsset(path: string) {
   return path.startsWith("/_next/static/") || path.startsWith("/art/") || path === "/icon.svg";
@@ -7,7 +8,18 @@ function isAsset(path: string) {
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const headers = new Headers(request.headers);
-  const passthrough = isAsset(path) || path === "/api" || path.startsWith("/api/") || path.startsWith("/_next/");
+  if (path === "/api" || path.startsWith("/api/")) {
+    headers.delete("x-flux-client");
+    const key = process.env.FLUX_PROXY_KEY;
+    const address = request.headers.get("x-vercel-forwarded-for");
+    if (key && process.env.VERCEL === "1" && address && isIP(address)) {
+      const identity = `${Date.now()},${address}`;
+      const signature = createHmac("sha256", key).update(`${identity},${request.method},${path}`).digest("hex");
+      headers.set("x-flux-client", `${identity},${signature}`);
+    }
+    return NextResponse.next({ request: { headers } });
+  }
+  const passthrough = isAsset(path) || path.startsWith("/_next/");
   if (passthrough || process.env.NODE_ENV !== "production") return NextResponse.next({ request: { headers } });
   const nonce = randomBytes(18).toString("base64");
   const host = new URL(process.env.APP_ORIGIN ?? request.url).host;

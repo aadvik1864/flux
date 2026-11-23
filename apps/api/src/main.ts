@@ -46,9 +46,14 @@ async function main() {
   app.use("/auth", rateLimit({
     windowMs: 15 * 60_000, limit: env.NODE_ENV === "production" ? 60 : 1000,
     standardHeaders: "draft-8", legacyHeaders: false,
+    skip: request => ["GET", "HEAD", "OPTIONS"].includes(request.method),
     message: { message: "Too many attempts. Try again later" },
   }));
-  app.use(rateLimit({ windowMs: 60_000, limit: env.NODE_ENV === "production" ? 300 : 3000, standardHeaders: "draft-8", legacyHeaders: false }));
+  app.use(rateLimit({
+    windowMs: 60_000, limit: env.NODE_ENV === "production" ? 300 : 3000,
+    standardHeaders: "draft-8", legacyHeaders: false,
+    message: { message: "Too many requests. Try again in a minute" },
+  }));
   app.enableShutdownHooks();
   await app.listen(env.API_PORT, env.API_HOST);
 }

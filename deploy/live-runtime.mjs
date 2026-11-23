@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
+import { clientAddress } from './live-client-ip.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const children = [
@@ -17,7 +18,8 @@ const gateway = http.createServer((req, res) => {
     return;
   }
   if (!url.pathname.startsWith('/api/')) { res.writeHead(404); res.end('Not found'); return; }
-  const headers = { ...req.headers, 'x-forwarded-for': req.socket.remoteAddress, 'x-forwarded-proto': 'https' };
+  const headers = { ...req.headers, 'x-forwarded-for': clientAddress(req, url.pathname, process.env.FLUX_PROXY_KEY), 'x-forwarded-proto': 'https' };
+  delete headers['x-flux-client'];
   const upstream = http.request({ hostname: '127.0.0.1', port: 4000, path: req.url.slice(4), method: req.method, headers }, response => {
     res.writeHead(response.statusCode, response.headers); response.pipe(res);
   });

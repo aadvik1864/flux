@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { proxy } from "../../apps/web/proxy";
@@ -12,6 +13,21 @@ describe("live deployment isolation", () => {
     expect(response.headers.get("x-middleware-next")).toBe("1");
     expect(response.headers.get("x-middleware-request-cookie")).toBe("__Host-flux_session=sample");
     expect(proxy(new NextRequest("https://flux-live.vercel.app/login")).status).toBe(200);
+  });
+  it("replaces a caller-supplied client proof with one signed by the Vercel proxy", () => {
+    vi.stubEnv("VERCEL", "1");
+    const key = "test-key";
+    vi.stubEnv("FLUX_PROXY_KEY", key);
+    const headers = { "x-flux-client": "untrusted", "x-vercel-forwarded-for": "203.0.113.42" };
+    const url = "https://flux-live.vercel.app/api/auth/login";
+    const forward = () => proxy(new NextRequest(url, { method: "POST", headers })).headers;
+    const result = forward();
+    const [timestamp, address, signature] = result.get("x-middleware-request-x-flux-client")!.split(",");
+    expect(address).toBe(headers["x-vercel-forwarded-for"]);
+    expect(signature).toBe(createHmac("sha256", key).update(`${timestamp},${address},POST,/api/auth/login`).digest("hex"));
+    expect(result.has("x-flux-client")).toBe(false);
+    vi.stubEnv("VERCEL", undefined);
+    expect(forward().has("x-middleware-request-x-flux-client")).toBe(false);
   });
   it("allows only the configured secure collaboration origin in CSP", () => {
     vi.stubEnv("VERCEL", "1"); vi.stubEnv("FLUX_DEPLOYMENT_MODE", "live");

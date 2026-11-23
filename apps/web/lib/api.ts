@@ -9,11 +9,21 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     credentials: "same-origin",
     cache: "no-store",
     signal: init.signal ?? AbortSignal.timeout(45_000),
+  }).catch((error: unknown) => {
+    if (init.signal?.aborted) throw error;
+    throw new ApiError("Flux did not respond. Wait a moment and try again.", 503);
   });
   const body = await response.json().catch(() => null);
-  if (!response.ok) {
+  if (!response.ok || (body === null && response.status !== 204)) {
     const message = body?.message;
-    throw new ApiError(typeof message === "string" ? message : "The request failed. Try again", response.status);
+    if (typeof message === "string") throw new ApiError(message, response.status);
+    if (response.status === 429) {
+      throw new ApiError("Flux is temporarily limiting requests. Wait a moment and try again.", 429);
+    }
+    if (response.status >= 500 || response.ok) {
+      throw new ApiError("Flux is temporarily unavailable. Wait a moment and try again.", 503);
+    }
+    throw new ApiError("The request failed. Try again", response.status);
   }
   return body as T;
 }
